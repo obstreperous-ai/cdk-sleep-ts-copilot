@@ -1,36 +1,59 @@
-# Architecture: Sleep Audio Pipeline
+# Architecture: Sleep Audio Pipeline (Target Design)
+
+> **Status:** This document describes the **intended target architecture**. It is a living design spec, not a reflection of what is currently deployed. See the [Implementation Status](#implementation-status) section for the current state of the CDK stack.
 
 ## Overview
 
-This project implements an **event-driven sleep audio pipeline** on AWS, built with TypeScript CDK following strict TDD practices. The pipeline ingests raw audio files, processes them asynchronously, and delivers metadata and notifications to downstream consumers.
+The **target architecture** is an event-driven sleep audio pipeline on AWS, built with TypeScript CDK following strict TDD practices. When complete, the pipeline will ingest raw audio files, process them asynchronously, and deliver metadata and notifications to downstream consumers.
 
-## Pipeline Description
+## Implementation Status
 
-### 1. Ingestion (S3)
+| Component | Status | CDK construct / file |
+|---|---|---|
+| CDK app skeleton | ✅ Done | `bin/cdk-base.ts`, `lib/cdk-base-stack.ts` |
+| Jest + assertions setup | ✅ Done | `test/cdk-base.test.ts` |
+| CI workflow | ✅ Done | `.github/workflows/ci.yml` |
+| S3 Input Bucket | ⬜ Not started | — |
+| EventBridge Event Bus | ⬜ Not started | — |
+| Lambda – Transcription / Analysis | ⬜ Not started | — |
+| Lambda – Metadata Enrichment | ⬜ Not started | — |
+| Lambda – Output Generation | ⬜ Not started | — |
+| DynamoDB Processing Table | ⬜ Not started | — |
+| S3 Output Bucket | ⬜ Not started | — |
+| SNS Notification Topic | ⬜ Not started | — |
+| SQS Dead-Letter Queue | ⬜ Not started | — |
 
-A dedicated **S3 input bucket** receives raw sleep audio files (e.g., `.mp3`, `.wav`, `.ogg`). Object-level event notifications are configured to publish `ObjectCreated` events to **EventBridge** via an S3 notification rule.
+> This table must be updated in the same commit as every infrastructure change.
 
-### 2. Event Routing (EventBridge)
+---
 
-An **EventBridge event bus** receives the S3 object creation events. An EventBridge rule matches on the source bucket and key prefix, then routes events to the processing layer. This decouples producers from consumers and enables fine-grained filtering without polling.
+## Target Pipeline Description
 
-### 3. Processing Layer (Lambda)
+### 1. Ingestion (S3) — planned
 
-One or more **Lambda functions** are triggered by EventBridge:
+A dedicated **S3 input bucket** will receive raw sleep audio files (e.g., `.mp3`, `.wav`, `.ogg`). Object-level event notifications will publish `ObjectCreated` events to **EventBridge** via an S3 notification rule.
+
+### 2. Event Routing (EventBridge) — planned
+
+An **EventBridge event bus** will receive the S3 object creation events. An EventBridge rule will match on the source bucket and key prefix, then route events to the processing layer. This decouples producers from consumers and enables fine-grained filtering without polling.
+
+### 3. Processing Layer (Lambda) — planned
+
+One or more **Lambda functions** will be triggered by EventBridge:
 
 - **Transcription / Analysis Lambda** – Calls Amazon Transcribe or a third-party ML model to analyse the audio (e.g., detect sleep-stage markers, ambient noise level).
 - **Metadata Enrichment Lambda** – Augments the raw transcription result with user-provided metadata and writes a structured record to **DynamoDB**.
 - **Output Generation Lambda** – Produces a processed audio artefact (trimmed, normalised, or annotated) and writes it to a separate **S3 output bucket**.
 
-Each Lambda is idempotent and retries are handled by EventBridge's built-in retry policy and a dead-letter queue (DLQ) backed by **SQS**.
+Each Lambda will be idempotent; retries will be handled by EventBridge's built-in retry policy and a dead-letter queue (DLQ) backed by **SQS**.
 
-### 4. Persistence (DynamoDB)
+### 4. Persistence (DynamoDB) — planned
 
-A **DynamoDB table** stores per-file processing results using the S3 object key as the partition key. GSIs enable querying by user or processing status.
+A **DynamoDB table** will store per-file processing results using the S3 object key as the partition key. GSIs will enable querying by user or processing status.
 
-### 5. Notifications (SNS)
+### 5. Notifications (SNS) — planned
 
-An **SNS topic** publishes completion or failure notifications. Subscribers can include email endpoints, SQS queues for downstream systems, or additional Lambda functions.
+An **SNS topic** will publish completion or failure notifications. Subscribers can include email endpoints, SQS queues for downstream systems, or additional Lambda functions.
 
 ---
 
