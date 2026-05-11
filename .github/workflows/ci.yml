@@ -32,5 +32,3 @@ jobs:
       - name: CDK Synth
         run: npx cdk synth
 
-      - name: CDK Diff (dry-run against empty state)
-        run: npx cdk diff --no-fail
