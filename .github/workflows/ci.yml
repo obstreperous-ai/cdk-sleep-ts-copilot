@@ -34,4 +34,3 @@ jobs:
 
       - name: CDK Diff (dry-run against empty state)
         run: npx cdk diff --no-fail
-        continue-on-error: true
