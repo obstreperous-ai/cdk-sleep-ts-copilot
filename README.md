@@ -1,6 +1,6 @@
 # cdk-sleep-ts-copilot
 
-An **event-driven sleep audio pipeline** built with AWS CDK (TypeScript), developed issue-by-issue with strict Test-Driven Development. Raw audio files uploaded to an S3 input bucket trigger EventBridge events that fan out to Lambda-based processing functions, which persist results to DynamoDB, write processed audio to an S3 output bucket, and publish completion notifications via SNS. All infrastructure is defined as code using CDK L2/L3 constructs, every construct has a corresponding Jest assertion test written before the code, and `ARCHITECTURE.md` is kept perfectly in sync with the actual topology after every change.
+An **event-driven sleep audio pipeline** being built with AWS CDK (TypeScript), developed issue-by-issue with strict Test-Driven Development. The target architecture is for raw audio files uploaded to an S3 input bucket to trigger EventBridge events that fan out to Lambda-based processing functions, which will persist results to DynamoDB, write processed audio to an S3 output bucket, and publish completion notifications via SNS. Infrastructure is being added incrementally in code using CDK constructs, with corresponding Jest assertion tests written alongside each change; until the full pipeline exists, treat [ARCHITECTURE.md](./ARCHITECTURE.md) as the intended design and check the current CDK stack and tests for implementation status.
 
 ## TDD Rules
 
