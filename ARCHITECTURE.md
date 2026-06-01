@@ -17,7 +17,7 @@ recordings, ambient sounds) to an input **S3 bucket**. Each upload emits an even
 routed by **EventBridge** to an **AWS Step Functions** state machine, which orchestrates the
 processing workflow: validation and metadata extraction, optional **Amazon Polly**
 text-to-speech (soothing narration) and optional **Amazon Bedrock** AI audio enhancement /
-generation. Processed artefacts land in a versioned output **S3 bucket**, processing metadata
+generation. Processed artifacts land in a versioned output **S3 bucket**, processing metadata
 is persisted to **DynamoDB**, and completion or error notifications are fanned out via **SNS**.
 
 Design goals:
@@ -77,7 +77,7 @@ Design goals:
      bucket.
    - **Enhance / generate audio (Amazon Bedrock)** — Optionally call a Bedrock model to
      enhance the audio or generate AI sleep soundscapes.
-   - **Persist output** — A Lambda task writes the processed artefact to the **versioned S3
+   - **Persist output** — A Lambda task writes the processed artifact to the **versioned S3
      output bucket** under a deterministic key and updates the DynamoDB record to `COMPLETED`.
 5. **Notify** — On success or failure the workflow publishes a message to the **SNS topic**;
    subscribers (email, SQS, downstream Lambdas) react accordingly.
