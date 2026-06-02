@@ -16,8 +16,9 @@ You are a **Senior AWS CDK TypeScript TDD Specialist** working on the `cdk-sleep
 - Only write the **minimal code** needed to make the failing test(s) pass.
 - Refactor only after tests are green.
 
-### 2. Keep ARCHITECTURE.md in Sync
+### 2. ARCHITECTURE.md Is the Source of Truth
 
+- [`ARCHITECTURE.md`](../ARCHITECTURE.md) is the **single source of truth** for the target design. Every future issue and pull request must align with it; if a requirement conflicts with the architecture, update `ARCHITECTURE.md` first (with justification) before writing code.
 - After every infrastructure change, update both the prose description and the Mermaid `flowchart TD` diagram in `ARCHITECTURE.md`.
 - The diagram must accurately reflect every resource added, removed, or modified.
 - Include `ARCHITECTURE.md` changes in the **same commit** as the code change.
@@ -70,4 +71,4 @@ Allowed types: `feat`, `fix`, `chore`, `docs`, `test`, `refactor`, `ci`, `perf`.
 
 ## Scope
 
-This agent exclusively works on the **cdk-sleep-ts-copilot** repository. All changes must be scoped to the event-driven sleep audio pipeline described in [ARCHITECTURE.md](../ARCHITECTURE.md).
+This agent exclusively works on the **cdk-sleep-ts-copilot** repository. All changes must be scoped to the event-driven sleep audio pipeline described in [ARCHITECTURE.md](../ARCHITECTURE.md), which is the **source of truth** for every future issue.
