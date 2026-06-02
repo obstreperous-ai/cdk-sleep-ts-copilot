@@ -42,15 +42,15 @@ Design goals:
 | Jest + assertions setup | ✅ Done | `test/cdk-base.test.ts` |
 | CI workflow | ✅ Done | `.github/workflows/ci.yml` |
 | Multi-environment context (dev/stage/prod) | ⬜ Not started | — |
-| S3 Input Bucket | ⬜ Not started | — |
-| EventBridge Rule (S3 → Step Functions) | ⬜ Not started | — |
+| S3 Input Bucket | ✅ Done | `lib/cdk-base-stack.ts` (SleepAudioInputBucket) |
+| EventBridge Rule (S3 → Step Functions) | ✅ Done | `lib/cdk-base-stack.ts` (S3ObjectCreatedRule) |
 | Step Functions Orchestrator | ⬜ Not started | — |
 | Lambda – Validation / Metadata Extraction | ⬜ Not started | — |
 | Amazon Polly Integration (TTS) | ⬜ Not started | — |
 | Amazon Bedrock Integration (enhancement) | ⬜ Not started | — |
 | Lambda – Output Generation | ⬜ Not started | — |
 | DynamoDB Metadata Table | ⬜ Not started | — |
-| S3 Output Bucket (versioned) | ⬜ Not started | — |
+| S3 Output Bucket (versioned) | ✅ Done | `lib/cdk-base-stack.ts` (SleepAudioOutputBucket) |
 | SNS Notification Topic | ⬜ Not started | — |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
 | CloudWatch Alarms | ⬜ Not started | — |
@@ -86,7 +86,41 @@ Design goals:
 
 ---
 
-## 4. Key AWS Services & Rationale
+## 4. Implemented Core Components (Issue #3)
+
+The following foundational components are now implemented and tested:
+
+### S3 Input Bucket (SleepAudioInputBucket)
+- **Encryption**: S3-managed encryption (SSE-S3) at rest
+- **Versioning**: Enabled to track all changes and prevent data loss
+- **Public Access**: Completely blocked (all four public access settings enabled)
+- **EventBridge Integration**: Enabled to emit Object Created events to the default event bus
+- **SSL Enforcement**: Bucket policy denies all non-HTTPS requests
+- **Retention**: RETAIN policy protects against accidental deletion
+
+### S3 Output Bucket (SleepAudioOutputBucket)
+- **Encryption**: S3-managed encryption (SSE-S3) at rest
+- **Versioning**: Enabled to protect processed outputs and enable rollback
+- **Public Access**: Completely blocked
+- **SSL Enforcement**: Bucket policy denies all non-HTTPS requests
+- **Retention**: RETAIN policy protects against accidental deletion
+
+### EventBridge Rule (S3ObjectCreatedRule)
+- **Event Pattern**: Matches `Object Created` events from the input bucket
+- **State**: Enabled and ready to route events
+- **Target**: Currently routes to a placeholder CloudWatch Logs group
+  - *Note*: The target will be replaced with a Step Functions state machine in Issue #4
+- **Description**: Documents the rule's purpose for future maintainers
+
+All components follow AWS best practices:
+- Least-privilege IAM (custom resources have minimal required permissions)
+- Encryption at rest and in transit
+- Private by default (no public access)
+- Infrastructure as code with comprehensive test coverage (15 passing tests)
+
+---
+
+## 5. Key AWS Services & Rationale
 
 | Concern | Service | Why it was chosen |
 |---|---|---|
@@ -104,52 +138,62 @@ Design goals:
 
 ---
 
-## 5. Mermaid Diagram
+## 6. Mermaid Diagram
+
+> **Note**: Components marked with ✅ are **implemented and tested**. Components without ✅ are planned for future issues.
 
 ```mermaid
 flowchart TD
-    U([User / Client]) -->|1 . Upload raw audio| S3in[(S3 Input Bucket<br/>private, encrypted)]
+    U([User / Client]) -->|1 . Upload raw audio| S3in[(✅ S3 Input Bucket<br/>private, encrypted, versioned)]
 
-    S3in -->|2 . Object Created event| EB{{EventBridge Rule}}
-    EB -->|3 . StartExecution| SFN
+    S3in -->|2 . Object Created event| EB{{✅ EventBridge Rule}}
+    EB -.->|3 . Placeholder: Logs to CW| CWLOGS[CloudWatch Logs<br/>Placeholder Target]
+    EB -.->|Future: StartExecution| SFN
 
-    subgraph SFN [AWS Step Functions: Processing Workflow]
+    subgraph SFN [AWS Step Functions: Processing Workflow - Future]
         direction TB
         V[Validate &amp; Extract Metadata<br/>Lambda] --> POLLY[Amazon Polly<br/>Text-to-Speech]
         POLLY --> BED[Amazon Bedrock<br/>Audio Enhancement]
         BED --> OUT[Generate Output<br/>Lambda]
     end
 
-    V -->|PROCESSING record| DDB[(DynamoDB<br/>Metadata Table)]
-    OUT -->|COMPLETED record| DDB
-    OUT -->|4 . Processed audio| S3out[(S3 Output Bucket<br/>versioned, encrypted)]
+    V -.->|PROCESSING record| DDB[(DynamoDB<br/>Metadata Table)]
+    OUT -.->|COMPLETED record| DDB
+    OUT -.->|4 . Processed audio| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted)]
 
-    SFN -->|5 . Success / failure| SNS{{SNS Topic}}
+    SFN -.->|5 . Success / failure| SNS{{SNS Topic}}
     SFN -. on error / poison event .-> DLQ[(SQS Dead-Letter Queue)]
 
-    SNS -->|Notification| Email([Email Subscriber])
-    SNS -->|Notification| SQSdown[(SQS Downstream Queue)]
+    SNS -.->|Notification| Email([Email Subscriber])
+    SNS -.->|Notification| SQSdown[(SQS Downstream Queue)]
 
     SFN -. logs &amp; metrics .-> CW[CloudWatch<br/>Logs &amp; Alarms]
 
-    style S3in fill:#e07b39,color:#fff
-    style S3out fill:#e07b39,color:#fff
-    style EB fill:#e7157b,color:#fff
-    style SFN fill:#cd2264,color:#fff
-    style V fill:#f90,color:#000
-    style OUT fill:#f90,color:#000
-    style POLLY fill:#1b660f,color:#fff
-    style BED fill:#1b660f,color:#fff
-    style DDB fill:#4053d6,color:#fff
-    style SNS fill:#d9534f,color:#fff
-    style DLQ fill:#aaa,color:#000
-    style SQSdown fill:#aaa,color:#000
-    style CW fill:#759c3e,color:#fff
+    style S3in fill:#e07b39,color:#fff,stroke:#000,stroke-width:3px
+    style S3out fill:#e07b39,color:#fff,stroke:#000,stroke-width:3px
+    style EB fill:#e7157b,color:#fff,stroke:#000,stroke-width:3px
+    style CWLOGS fill:#759c3e,color:#fff
+    style SFN fill:#cd2264,color:#fff,stroke-dasharray: 5 5
+    style V fill:#f90,color:#000,stroke-dasharray: 5 5
+    style OUT fill:#f90,color:#000,stroke-dasharray: 5 5
+    style POLLY fill:#1b660f,color:#fff,stroke-dasharray: 5 5
+    style BED fill:#1b660f,color:#fff,stroke-dasharray: 5 5
+    style DDB fill:#4053d6,color:#fff,stroke-dasharray: 5 5
+    style SNS fill:#d9534f,color:#fff,stroke-dasharray: 5 5
+    style DLQ fill:#aaa,color:#000,stroke-dasharray: 5 5
+    style SQSdown fill:#aaa,color:#000,stroke-dasharray: 5 5
+    style CW fill:#759c3e,color:#fff,stroke-dasharray: 5 5
 ```
+
+**Legend:**
+- ✅ = Implemented and tested (Issue #3)
+- Solid boxes with thick border = Implemented components
+- Dashed boxes/arrows = Planned for future implementation
+- Placeholder target will be replaced with Step Functions in Issue #4
 
 ---
 
-## 6. Security
+## 7. Security
 
 - **Private buckets** — Both S3 buckets block all public access; access only via IAM roles.
 - **Encryption at rest** — S3 (SSE-KMS or SSE-S3), DynamoDB, SNS, and SQS all encrypted.
@@ -165,7 +209,7 @@ flowchart TD
 
 ---
 
-## 7. Observability
+## 8. Observability
 
 - **Structured logging** — Lambda and Step Functions emit JSON logs to **CloudWatch Logs**
   with bounded retention per environment.
@@ -177,7 +221,7 @@ flowchart TD
 
 ---
 
-## 8. Cost Considerations
+## 9. Cost Considerations
 
 - **Pay-per-use** — All services are serverless; there is no idle compute cost.
 - **DynamoDB on-demand** billing avoids provisioning for unpredictable workloads.
@@ -189,7 +233,7 @@ flowchart TD
 
 ---
 
-## 9. Multi-Environment Support
+## 10. Multi-Environment Support
 
 Environments (`dev`, `stage`, `prod`) are selected via **CDK context** (e.g.
 `npx cdk synth -c env=stage`). Each environment derives its own resource names, removal
@@ -198,7 +242,7 @@ the same stack code deploys safely to every account/region without modification.
 
 ---
 
-## 10. Future Extensibility
+## 11. Future Extensibility
 
 - Add audio formats and richer validation (codec, sample-rate checks).
 - Introduce a real-time API (API Gateway + WebSockets) for upload status.
@@ -208,7 +252,7 @@ the same stack code deploys safely to every account/region without modification.
 
 ---
 
-## 11. Key Design Decisions
+## 12. Key Design Decisions
 
 | Decision | Choice | Rationale |
 |---|---|---|
