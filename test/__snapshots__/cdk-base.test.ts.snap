@@ -337,6 +337,32 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::S3::BucketPolicy",
     },
+    "SleepAudioMetadataTableD77D3179": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "audioId",
+            "AttributeType": "S",
+          },
+        ],
+        "BillingMode": "PAY_PER_REQUEST",
+        "KeySchema": [
+          {
+            "AttributeName": "audioId",
+            "KeyType": "HASH",
+          },
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true,
+        },
+        "SSESpecification": {
+          "SSEEnabled": true,
+        },
+      },
+      "Type": "AWS::DynamoDB::Table",
+      "UpdateReplacePolicy": "Retain",
+    },
     "SleepAudioOutputBucketBD13D91D": {
       "DeletionPolicy": "Retain",
       "Properties": {
@@ -420,7 +446,15 @@ def sort_filter_rules(json_obj):
           "Fn::Join": [
             "",
             [
-              "{"StartAt":"PollyTask","States":{"PollyTask":{"End":true,"Type":"Task","ResultPath":"$.pollyResult","Resource":"arn:",
+              "{"StartAt":"PutMetadataTask","States":{"PutMetadataTask":{"Next":"PollyTask","Type":"Task","ResultPath":"$.metadataResult","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::dynamodb:putItem","Parameters":{"Item":{"audioId":{"S.$":"$.key"},"status":{"S":"PROCESSING"},"inputBucket":{"S.$":"$.bucket"},"inputKey":{"S.$":"$.key"},"createdAt":{"S.$":"$$.State.EnteredTime"},"updatedAt":{"S.$":"$$.State.EnteredTime"}},"TableName":"",
+              {
+                "Ref": "SleepAudioMetadataTableD77D3179",
+              },
+              ""}},"PollyTask":{"End":true,"Type":"Task","ResultPath":"$.pollyResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -522,6 +556,33 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "PolicyDocument": {
           "Statement": [
+            {
+              "Action": "dynamodb:PutItem",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":dynamodb:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":table/",
+                    {
+                      "Ref": "SleepAudioMetadataTableD77D3179",
+                    },
+                  ],
+                ],
+              },
+            },
             {
               "Action": "polly:startSpeechSynthesisTask",
               "Effect": "Allow",
