@@ -44,9 +44,9 @@ Design goals:
 | Multi-environment context (dev/stage/prod) | ⬜ Not started | — |
 | S3 Input Bucket | ✅ Done | `lib/cdk-base-stack.ts` (SleepAudioInputBucket) |
 | EventBridge Rule (S3 → Step Functions) | ✅ Done | `lib/cdk-base-stack.ts` (S3ObjectCreatedRule) |
-| Step Functions Orchestrator | ⬜ Not started | — |
+| Step Functions Orchestrator | ✅ Done (Issue #4) | `lib/cdk-base-stack.ts` (SleepAudioPipelineStateMachine) |
 | Lambda – Validation / Metadata Extraction | ⬜ Not started | — |
-| Amazon Polly Integration (TTS) | ⬜ Not started | — |
+| Amazon Polly Integration (TTS) | ✅ Done (Issue #4, skeleton) | `lib/cdk-base-stack.ts` (PollyTask) |
 | Amazon Bedrock Integration (enhancement) | ⬜ Not started | — |
 | Lambda – Output Generation | ⬜ Not started | — |
 | DynamoDB Metadata Table | ⬜ Not started | — |
@@ -86,7 +86,7 @@ Design goals:
 
 ---
 
-## 4. Implemented Core Components (Issue #3)
+## 4. Implemented Core Components (Issues #3 and #4)
 
 The following foundational components are now implemented and tested:
 
@@ -108,15 +108,29 @@ The following foundational components are now implemented and tested:
 ### EventBridge Rule (S3ObjectCreatedRule)
 - **Event Pattern**: Matches `Object Created` events from the input bucket
 - **State**: Enabled and ready to route events
-- **Target**: Currently routes to a placeholder CloudWatch Logs group
-  - *Note*: The target will be replaced with a Step Functions state machine in Issue #4
+- **Target**: Routes to Step Functions state machine
+- **Input Transformation**: Extracts bucket name and object key from S3 event and passes to state machine
 - **Description**: Documents the rule's purpose for future maintainers
 
+### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issue #4
+- **Orchestration**: Manages the audio processing workflow with built-in retries and error handling
+- **Definition**: Simple skeleton workflow: Start → Polly Task → End
+- **CloudWatch Logs**: Full execution logging enabled (level: ALL, includes execution data)
+- **IAM Role**: Execution role with least-privilege permissions for Polly and S3 output bucket
+- **Polly Integration**: Task state that invokes `polly:startSpeechSynthesisTask` with placeholder parameters
+  - Output format: MP3
+  - Voice: Joanna (neural voice)
+  - Text: Placeholder narration text
+  - Output location: S3 output bucket
+- **Event-Driven**: Triggered automatically by EventBridge rule on S3 uploads
+- **Input**: Receives bucket name and object key from EventBridge event
+
 All components follow AWS best practices:
-- Least-privilege IAM (custom resources have minimal required permissions)
+- Least-privilege IAM (scoped permissions for each service)
 - Encryption at rest and in transit
 - Private by default (no public access)
-- Infrastructure as code with comprehensive test coverage (15 passing tests)
+- Infrastructure as code with comprehensive test coverage (23 passing tests)
+- Observable via CloudWatch Logs and Step Functions execution history
 
 ---
 
@@ -140,56 +154,59 @@ All components follow AWS best practices:
 
 ## 6. Mermaid Diagram
 
-> **Note**: Components marked with ✅ are **implemented and tested**. Components without ✅ are planned for future issues.
+> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3 and #4). Components without ✅ are planned for future issues.
 
 ```mermaid
 flowchart TD
-    U([User / Client]) -->|1 . Upload raw audio| S3in[(✅ S3 Input Bucket<br/>private, encrypted, versioned)]
+    U([User / Client]) -->|1. Upload raw audio| S3in[(✅ S3 Input Bucket<br/>private, encrypted, versioned)]
 
-    S3in -->|2 . Object Created event| EB{{✅ EventBridge Rule}}
-    EB -.->|3 . Placeholder: Logs to CW| CWLOGS[CloudWatch Logs<br/>Placeholder Target]
-    EB -.->|Future: StartExecution| SFN
+    S3in -->|2. Object Created event| EB{{✅ EventBridge Rule}}
+    EB -->|3. StartExecution<br/>with bucket + key| SFN[✅ Step Functions<br/>SleepAudioPipelineStateMachine]
 
-    subgraph SFN [AWS Step Functions: Processing Workflow - Future]
+    subgraph SFN_Detail [✅ Step Functions State Machine - Implemented]
         direction TB
-        V[Validate &amp; Extract Metadata<br/>Lambda] --> POLLY[Amazon Polly<br/>Text-to-Speech]
-        POLLY --> BED[Amazon Bedrock<br/>Audio Enhancement]
-        BED --> OUT[Generate Output<br/>Lambda]
+        POLLY[✅ Polly Task<br/>startSpeechSynthesisTask<br/>Placeholder narration]
     end
 
-    V -.->|PROCESSING record| DDB[(DynamoDB<br/>Metadata Table)]
-    OUT -.->|COMPLETED record| DDB
-    OUT -.->|4 . Processed audio| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted)]
+    POLLY -.->|Writes MP3| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted)]
+    SFN -.->|Execution logs| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs]
 
-    SFN -.->|5 . Success / failure| SNS{{SNS Topic}}
-    SFN -. on error / poison event .-> DLQ[(SQS Dead-Letter Queue)]
-
-    SNS -.->|Notification| Email([Email Subscriber])
-    SNS -.->|Notification| SQSdown[(SQS Downstream Queue)]
-
-    SFN -. logs &amp; metrics .-> CW[CloudWatch<br/>Logs &amp; Alarms]
+    subgraph Future [Future Components - Not Yet Implemented]
+        direction TB
+        V[Validate & Extract Metadata<br/>Lambda] -.-> BED[Amazon Bedrock<br/>Audio Enhancement]
+        BED -.-> OUT[Generate Output<br/>Lambda]
+        V -.->|PROCESSING record| DDB[(DynamoDB<br/>Metadata Table)]
+        OUT -.->|COMPLETED record| DDB
+        SFN -.->|5. Success / failure| SNS{{SNS Topic}}
+        SFN -.->|on error / poison event| DLQ[(SQS Dead-Letter Queue)]
+        SNS -.->|Notification| Email([Email Subscriber])
+        SNS -.->|Notification| SQSdown[(SQS Downstream Queue)]
+    end
 
     style S3in fill:#e07b39,color:#fff,stroke:#000,stroke-width:3px
     style S3out fill:#e07b39,color:#fff,stroke:#000,stroke-width:3px
     style EB fill:#e7157b,color:#fff,stroke:#000,stroke-width:3px
-    style CWLOGS fill:#759c3e,color:#fff
-    style SFN fill:#cd2264,color:#fff,stroke-dasharray: 5 5
+    style SFN fill:#cd2264,color:#fff,stroke:#000,stroke-width:3px
+    style POLLY fill:#1b660f,color:#fff,stroke:#000,stroke-width:3px
+    style CWLOGS fill:#759c3e,color:#fff,stroke:#000,stroke-width:3px
+    style SFN_Detail fill:#f0f0f0,stroke:#cd2264,stroke-width:2px
+    style Future fill:#f9f9f9,stroke:#999,stroke-width:1px,stroke-dasharray: 5 5
     style V fill:#f90,color:#000,stroke-dasharray: 5 5
     style OUT fill:#f90,color:#000,stroke-dasharray: 5 5
-    style POLLY fill:#1b660f,color:#fff,stroke-dasharray: 5 5
     style BED fill:#1b660f,color:#fff,stroke-dasharray: 5 5
     style DDB fill:#4053d6,color:#fff,stroke-dasharray: 5 5
     style SNS fill:#d9534f,color:#fff,stroke-dasharray: 5 5
     style DLQ fill:#aaa,color:#000,stroke-dasharray: 5 5
     style SQSdown fill:#aaa,color:#000,stroke-dasharray: 5 5
-    style CW fill:#759c3e,color:#fff,stroke-dasharray: 5 5
+    style Email fill:#ddd,color:#000,stroke-dasharray: 5 5
 ```
 
 **Legend:**
-- ✅ = Implemented and tested (Issue #3)
-- Solid boxes with thick border = Implemented components
+- ✅ = Implemented and tested (Issues #3 and #4)
+- Solid boxes with thick border = Fully implemented and wired components
+- Solid arrows = Active data flow paths
 - Dashed boxes/arrows = Planned for future implementation
-- Placeholder target will be replaced with Step Functions in Issue #4
+- Current state machine is a skeleton with a single Polly task; full workflow logic will be added in subsequent issues
 
 ---
 

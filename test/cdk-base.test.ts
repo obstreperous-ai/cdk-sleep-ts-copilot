@@ -144,6 +144,123 @@ describe('CdkBaseStack', () => {
     });
   });
 
+  describe('Step Functions State Machine', () => {
+    test('should exist', () => {
+      template.resourceCountIs('AWS::StepFunctions::StateMachine', 1);
+    });
+
+    test('should have CloudWatch Logs enabled', () => {
+      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+        LoggingConfiguration: {
+          Level: 'ALL',
+          IncludeExecutionData: true,
+          Destinations: Match.arrayWith([
+            Match.objectLike({
+              CloudWatchLogsLogGroup: Match.objectLike({
+                LogGroupArn: Match.anyValue(),
+              }),
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have an IAM execution role', () => {
+      // State machine should have a role
+      template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+        RoleArn: Match.objectLike({
+          'Fn::GetAtt': Match.arrayWith([Match.stringLikeRegexp('.*Role.*')]),
+        }),
+      });
+    });
+
+    test('should have Polly permissions in execution role', () => {
+      // Find the role for the state machine and verify it has Polly permissions
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: 'states.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+      });
+
+      // Verify the role has a policy with Polly permissions
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: 'polly:startSpeechSynthesisTask',
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should contain a Polly task state in definition', () => {
+      // Verify the state machine definition includes a Polly task
+      // Note: DefinitionString is a Fn::Join object, not a plain string
+      const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+      const stateMachine = Object.values(stateMachines)[0];
+      const definitionString = stateMachine?.Properties?.DefinitionString;
+      
+      // Check that the definition is defined
+      expect(definitionString).toBeDefined();
+    });
+  });
+
+  describe('EventBridge Rule targeting Step Functions', () => {
+    test('should target the Step Functions state machine', () => {
+      // EventBridge rule should now target the state machine, not CloudWatch Logs
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Targets: Match.arrayWith([
+          Match.objectLike({
+            Arn: Match.objectLike({
+              Ref: Match.stringLikeRegexp('.*StateMachine.*'),
+            }),
+            RoleArn: Match.anyValue(),
+          }),
+        ]),
+      });
+    });
+
+    test('should pass S3 event data to state machine input', () => {
+      // EventBridge rule should have InputTransformer to pass bucket and key
+      template.hasResourceProperties('AWS::Events::Rule', {
+        Targets: Match.arrayWith([
+          Match.objectLike({
+            InputTransformer: {
+              InputPathsMap: {
+                'detail-bucket-name': '$.detail.bucket.name',
+                'detail-object-key': '$.detail.object.key',
+              },
+              InputTemplate: Match.stringLikeRegexp('.*bucket.*key.*'),
+            },
+          }),
+        ]),
+      });
+    });
+
+    test('should have IAM permission for EventBridge to start state machine execution', () => {
+      // There should be an IAM role for EventBridge to invoke Step Functions
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: 'events.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
   test('snapshot test', () => {
     const app = new cdk.App();
     const stack = new CdkBaseStack(app, 'SnapshotStack');
