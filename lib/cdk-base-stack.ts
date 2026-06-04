@@ -59,6 +59,8 @@ export class CdkBaseStack extends cdk.Stack {
 
     // DynamoDB PutItem Task - writes initial metadata record
     // Using DynamodbPutItem L2 construct for type-safe DynamoDB integration
+    // TODO: Consider using execution ID or bucket+key combination for unique audioId
+    // to avoid collision if same key is uploaded to different buckets
     const putMetadataTask = new tasks.DynamoPutItem(this, 'PutMetadataTask', {
       table: this.metadataTable,
       item: {
