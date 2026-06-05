@@ -44,14 +44,14 @@ Design goals:
 | Multi-environment context (dev/stage/prod) | ⬜ Not started | — |
 | S3 Input Bucket | ✅ Done | `lib/cdk-base-stack.ts` (SleepAudioInputBucket) |
 | EventBridge Rule (S3 → Step Functions) | ✅ Done | `lib/cdk-base-stack.ts` (S3ObjectCreatedRule) |
-| Step Functions Orchestrator | ✅ Done (Issue #4) | `lib/cdk-base-stack.ts` (SleepAudioPipelineStateMachine) |
+| Step Functions Orchestrator | ✅ Done (Issue #4, #6) | `lib/cdk-base-stack.ts` (SleepAudioPipelineStateMachine) |
 | Lambda – Validation / Metadata Extraction | ⬜ Not started | — |
 | Amazon Polly Integration (TTS) | ✅ Done (Issue #4, skeleton) | `lib/cdk-base-stack.ts` (PollyTask) |
 | Amazon Bedrock Integration (enhancement) | ⬜ Not started | — |
 | Lambda – Output Generation | ⬜ Not started | — |
 | DynamoDB Metadata Table | ✅ Done (Issue #5) | `lib/cdk-base-stack.ts` (SleepAudioMetadataTable) |
 | S3 Output Bucket (versioned) | ✅ Done | `lib/cdk-base-stack.ts` (SleepAudioOutputBucket) |
-| SNS Notification Topic | ⬜ Not started | — |
+| SNS Notification Topic | ✅ Done (Issue #6) | `lib/cdk-base-stack.ts` (SleepAudioPipelineCompletedTopic, SleepAudioPipelineFailedTopic) |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
 | CloudWatch Alarms | ⬜ Not started | — |
 
@@ -128,6 +128,57 @@ The following foundational components are now implemented and tested:
 - **Event-Driven**: Triggered automatically by EventBridge rule on S3 uploads
 - **Input**: Receives bucket name and object key from EventBridge event
 
+### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issues #4, #5, and #6
+- **Orchestration**: Manages the audio processing workflow with built-in retries and error handling
+- **Definition**: Enhanced workflow with error handling:
+  - Success path: Start → Put Metadata → Polly Task → Update Completed Status → Publish Success → End
+  - Error path: (on any error) → Update Failed Status → Publish Failure → End
+- **Error Handling (Issue #6)**: 
+  - Catch blocks on Put Metadata and Polly tasks capture all errors
+  - Error details captured in `$.error` path
+  - Failed executions update DynamoDB status to `FAILED` with error details
+  - All errors trigger SNS failure notifications
+- **Status Updates (Issue #6)**:
+  - Initial status: `PROCESSING` (from Put Metadata task)
+  - Success status: `COMPLETED` (via DynamoDB UpdateItem)
+  - Failure status: `FAILED` (via DynamoDB UpdateItem with error details)
+  - Status updates include `updatedAt` timestamp
+- **CloudWatch Logs**: Full execution logging enabled (level: ALL, includes execution data)
+- **IAM Role**: Execution role with least-privilege permissions for:
+  - DynamoDB: PutItem and UpdateItem operations
+  - Polly: startSpeechSynthesisTask
+  - S3: Write access to output bucket
+  - SNS: Publish to notification topics
+  - KMS: Decrypt/encrypt using SNS encryption key
+- **DynamoDB Integration (Issue #5)**: Initial task state that writes metadata record to DynamoDB
+  - Stores audioId (partition key), status, inputBucket, inputKey, createdAt, updatedAt
+  - Status set to `PROCESSING` when workflow starts
+  - Status updated to `COMPLETED` or `FAILED` based on workflow outcome
+- **Polly Integration**: Task state that invokes `polly:startSpeechSynthesisTask` with placeholder parameters
+  - Output format: MP3
+  - Voice: Joanna (neural voice)
+  - Text: Placeholder narration text
+  - Output location: S3 output bucket
+- **Event-Driven**: Triggered automatically by EventBridge rule on S3 uploads
+- **Input**: Receives bucket name and object key from EventBridge event
+
+### SNS Notification Topics (Issue #6)
+- **Completed Topic** (SleepAudioPipelineCompletedTopic):
+  - Display Name: "Sleep Audio Pipeline Completed"
+  - Encrypted using dedicated KMS key with key rotation enabled
+  - Publishes success notifications with: status, audioId, inputBucket, inputKey, completedAt
+  - Triggered at end of successful workflow execution
+- **Failed Topic** (SleepAudioPipelineFailedTopic):
+  - Display Name: "Sleep Audio Pipeline Failed"
+  - Encrypted using same KMS key as Completed topic
+  - Publishes failure notifications with: status, audioId, inputBucket, inputKey, error, failedAt
+  - Triggered when any error occurs in the workflow (Put Metadata or Polly task failures)
+- **KMS Encryption**:
+  - Dedicated KMS key (SnsEncryptionKey) with automatic key rotation
+  - Least-privilege key policy: State machine has decrypt/encrypt permissions
+  - Retain policy to prevent accidental deletion
+- **IAM**: State machine has scoped SNS:Publish permission on both topics
+
 ### DynamoDB Metadata Table (SleepAudioMetadataTable) - Issue #5
 - **Partition Key**: `audioId` (string) — unique identifier for each audio processing job
 - **Attributes**: Stores status, inputBucket, inputKey, createdAt, updatedAt
@@ -143,6 +194,41 @@ All components follow AWS best practices:
 - Private by default (no public access)
 - Infrastructure as code with comprehensive test coverage (30 passing tests)
 - Observable via CloudWatch Logs and Step Functions execution history
+
+### Notification and Error Handling Layer (Issue #6)
+
+The state machine now includes comprehensive error handling and notification capabilities:
+
+**Error Handling Flow:**
+- All critical tasks (Put Metadata, Polly Task) have Catch blocks that capture errors
+- Error details are captured in the `$.error` path for debugging and audit
+- Failed executions automatically transition to error handling path
+
+**Status Tracking:**
+- `PROCESSING`: Set when workflow starts (initial Put Metadata task)
+- `COMPLETED`: Set when workflow completes successfully (before success notification)
+- `FAILED`: Set when any error occurs (before failure notification)
+- All status updates include `updatedAt` timestamp; failures also include error details
+
+**Notifications:**
+- **Success Path**: After successful processing, updates status to `COMPLETED` and publishes to Completed SNS topic
+- **Failure Path**: On any error, updates status to `FAILED` (with error details) and publishes to Failed SNS topic
+- Both topics are encrypted using a dedicated KMS key with automatic key rotation
+- Notification messages include: status, audioId, bucket/key, timestamp, and error details (for failures)
+
+**Security:**
+- SNS topics encrypted using dedicated KMS key with key rotation enabled
+- State machine has scoped SNS:Publish permission only on these specific topics
+- State machine has KMS decrypt/encrypt permissions for SNS encryption key
+- All error details are captured but no sensitive data is exposed in notifications
+
+All components follow AWS best practices:
+- Least-privilege IAM (scoped permissions for each service)
+- Encryption at rest and in transit
+- Private by default (no public access)
+- Infrastructure as code with comprehensive test coverage (37 passing tests)
+- Observable via CloudWatch Logs and Step Functions execution history
+- Resilient error handling with automatic status updates and notifications
 
 ---
 
@@ -166,7 +252,7 @@ All components follow AWS best practices:
 
 ## 6. Mermaid Diagram
 
-> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3, #4, and #5). Components without ✅ are planned for future issues.
+> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3, #4, #5, and #6). Components without ✅ are planned for future issues.
 
 ```mermaid
 flowchart TD
@@ -175,25 +261,37 @@ flowchart TD
     S3in -->|2. Object Created event| EB{{✅ EventBridge Rule}}
     EB -->|3. StartExecution<br/>with bucket + key| SFN[✅ Step Functions<br/>SleepAudioPipelineStateMachine]
 
-    subgraph SFN_Detail [✅ Step Functions State Machine - Implemented]
+    subgraph SFN_Detail [✅ Step Functions State Machine - Implemented with Error Handling]
         direction TB
         PUTMETA[✅ Put Metadata Task<br/>DynamoDB PutItem<br/>status: PROCESSING]
         PUTMETA --> POLLY[✅ Polly Task<br/>startSpeechSynthesisTask<br/>Placeholder narration]
+        POLLY --> UPDATECOMPLETE[✅ Update Completed Status<br/>DynamoDB UpdateItem<br/>status: COMPLETED]
+        UPDATECOMPLETE --> PUBLISHSUCCESS[✅ Publish Success<br/>SNS Publish to Completed Topic]
+        
+        PUTMETA -.->|on error| UPDATEFAILED[✅ Update Failed Status<br/>DynamoDB UpdateItem<br/>status: FAILED]
+        POLLY -.->|on error| UPDATEFAILED
+        UPDATEFAILED -.-> PUBLISHFAILURE[✅ Publish Failure<br/>SNS Publish to Failed Topic]
     end
 
-    PUTMETA -.->|Write metadata| DDB[(✅ DynamoDB Table<br/>SleepAudioMetadataTable<br/>on-demand, encrypted, PITR)]
+    PUTMETA -.->|Write initial metadata| DDB[(✅ DynamoDB Table<br/>SleepAudioMetadataTable<br/>on-demand, encrypted, PITR)]
+    UPDATECOMPLETE -.->|Update status| DDB
+    UPDATEFAILED -.->|Update status + error| DDB
     POLLY -.->|Writes MP3| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted)]
     SFN -.->|Execution logs| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs]
+    
+    PUBLISHSUCCESS -.->|5a. Success notification| SNSCOMPLETE{{✅ SNS Completed Topic<br/>KMS encrypted}}
+    PUBLISHFAILURE -.->|5b. Failure notification| SNSFAILED{{✅ SNS Failed Topic<br/>KMS encrypted}}
+    
+    SNSCOMPLETE -.->|Notify| Email1([Email Subscriber])
+    SNSFAILED -.->|Notify| Email2([Email Subscriber])
 
     subgraph Future [Future Components - Not Yet Implemented]
         direction TB
         V[Validate & Extract Metadata<br/>Lambda] -.-> BED[Amazon Bedrock<br/>Audio Enhancement]
         BED -.-> OUT[Generate Output<br/>Lambda]
         OUT -.->|COMPLETED record| DDB
-        SFN -.->|5. Success / failure| SNS{{SNS Topic}}
         SFN -.->|on error / poison event| DLQ[(SQS Dead-Letter Queue)]
-        SNS -.->|Notification| Email([Email Subscriber])
-        SNS -.->|Notification| SQSdown[(SQS Downstream Queue)]
+        SNSCOMPLETE -.->|Notification| SQSdown[(SQS Downstream Queue)]
     end
 
     style S3in fill:#e07b39,color:#fff,stroke:#000,stroke-width:3px
@@ -202,6 +300,12 @@ flowchart TD
     style SFN fill:#cd2264,color:#fff,stroke:#000,stroke-width:3px
     style PUTMETA fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
     style POLLY fill:#1b660f,color:#fff,stroke:#000,stroke-width:3px
+    style UPDATECOMPLETE fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
+    style UPDATEFAILED fill:#d9534f,color:#fff,stroke:#000,stroke-width:3px
+    style PUBLISHSUCCESS fill:#5cb85c,color:#fff,stroke:#000,stroke-width:3px
+    style PUBLISHFAILURE fill:#d9534f,color:#fff,stroke:#000,stroke-width:3px
+    style SNSCOMPLETE fill:#5cb85c,color:#fff,stroke:#000,stroke-width:3px
+    style SNSFAILED fill:#d9534f,color:#fff,stroke:#000,stroke-width:3px
     style DDB fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
     style CWLOGS fill:#759c3e,color:#fff,stroke:#000,stroke-width:3px
     style SFN_Detail fill:#f0f0f0,stroke:#cd2264,stroke-width:2px
@@ -209,18 +313,22 @@ flowchart TD
     style V fill:#f90,color:#000,stroke-dasharray: 5 5
     style OUT fill:#f90,color:#000,stroke-dasharray: 5 5
     style BED fill:#1b660f,color:#fff,stroke-dasharray: 5 5
-    style SNS fill:#d9534f,color:#fff,stroke-dasharray: 5 5
     style DLQ fill:#aaa,color:#000,stroke-dasharray: 5 5
     style SQSdown fill:#aaa,color:#000,stroke-dasharray: 5 5
-    style Email fill:#ddd,color:#000,stroke-dasharray: 5 5
+    style Email1 fill:#ddd,color:#000
+    style Email2 fill:#ddd,color:#000
 ```
 
 **Legend:**
-- ✅ = Implemented and tested (Issues #3, #4, and #5)
+- ✅ = Implemented and tested (Issues #3, #4, #5, and #6)
 - Solid boxes with thick border = Fully implemented and wired components
 - Solid arrows = Active data flow paths
-- Dashed boxes/arrows = Planned for future implementation
-- Current state machine: Start → Put Metadata (DynamoDB) → Polly Task → End; full workflow logic will be added in subsequent issues
+- Dashed arrows = Error paths and auxiliary flows (implemented in Issue #6)
+- Dashed boxes = Planned for future implementation
+- Current state machine: 
+  - Success path: Start → Put Metadata → Polly Task → Update Completed Status → Publish Success → End
+  - Error path: (on error) → Update Failed Status → Publish Failure → End
+- Full workflow logic will be added in subsequent issues
 
 ---
 
