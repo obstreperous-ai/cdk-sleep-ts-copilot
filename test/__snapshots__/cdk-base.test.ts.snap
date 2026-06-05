@@ -435,6 +435,30 @@ def sort_filter_rules(json_obj):
       },
       "Type": "AWS::S3::BucketPolicy",
     },
+    "SleepAudioPipelineCompletedTopic28BF352F": {
+      "Properties": {
+        "DisplayName": "Sleep Audio Pipeline Completed",
+        "KmsMasterKeyId": {
+          "Fn::GetAtt": [
+            "SnsEncryptionKey25FFF4AF",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::SNS::Topic",
+    },
+    "SleepAudioPipelineFailedTopicAA49023E": {
+      "Properties": {
+        "DisplayName": "Sleep Audio Pipeline Failed",
+        "KmsMasterKeyId": {
+          "Fn::GetAtt": [
+            "SnsEncryptionKey25FFF4AF",
+            "Arn",
+          ],
+        },
+      },
+      "Type": "AWS::SNS::Topic",
+    },
     "SleepAudioPipelineStateMachine741D1700": {
       "DeletionPolicy": "Delete",
       "DependsOn": [
@@ -446,7 +470,7 @@ def sort_filter_rules(json_obj):
           "Fn::Join": [
             "",
             [
-              "{"StartAt":"PutMetadataTask","States":{"PutMetadataTask":{"Next":"PollyTask","Type":"Task","ResultPath":"$.metadataResult","Resource":"arn:",
+              "{"StartAt":"PutMetadataTask","States":{"PutMetadataTask":{"Next":"PollyTask","Catch":[{"ErrorEquals":["States.ALL"],"ResultPath":"$.error","Next":"UpdateFailedStatusTask"}],"Type":"Task","ResultPath":"$.metadataResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -454,7 +478,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioMetadataTableD77D3179",
               },
-              ""}},"PollyTask":{"End":true,"Type":"Task","ResultPath":"$.pollyResult","Resource":"arn:",
+              ""}},"PollyTask":{"Next":"UpdateCompletedStatusTask","Catch":[{"ErrorEquals":["States.ALL"],"ResultPath":"$.error","Next":"UpdateFailedStatusTask"}],"Type":"Task","ResultPath":"$.pollyResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -462,7 +486,39 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioOutputBucketBD13D91D",
               },
-              "","Text":"Placeholder text for sleep audio narration","VoiceId":"Joanna"}}}}",
+              "","Text":"Placeholder text for sleep audio narration","VoiceId":"Joanna"}},"UpdateCompletedStatusTask":{"Next":"PublishSuccessTask","Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::dynamodb:updateItem","Parameters":{"Key":{"audioId":{"S.$":"$.key"}},"TableName":"",
+              {
+                "Ref": "SleepAudioMetadataTableD77D3179",
+              },
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::sns:publish","Parameters":{"TopicArn":"",
+              {
+                "Ref": "SleepAudioPipelineCompletedTopic28BF352F",
+              },
+              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::dynamodb:updateItem","Parameters":{"Key":{"audioId":{"S.$":"$.key"}},"TableName":"",
+              {
+                "Ref": "SleepAudioMetadataTableD77D3179",
+              },
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#error":"error"},"ExpressionAttributeValues":{":status":{"S":"FAILED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":error":{"S.$":"$.error"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #error = :error"}},"PublishFailureTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              {
+                "Ref": "AWS::Partition",
+              },
+              ":states:::sns:publish","Parameters":{"TopicArn":"",
+              {
+                "Ref": "SleepAudioPipelineFailedTopicAA49023E",
+              },
+              "","Message":{"status":"FAILED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","error.$":"$.error","failedAt.$":"$$.State.EnteredTime"}}}}}",
             ],
           ],
         },
@@ -589,6 +645,47 @@ def sort_filter_rules(json_obj):
               "Resource": "*",
             },
             {
+              "Action": "dynamodb:UpdateItem",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition",
+                    },
+                    ":dynamodb:",
+                    {
+                      "Ref": "AWS::Region",
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId",
+                    },
+                    ":table/",
+                    {
+                      "Ref": "SleepAudioMetadataTableD77D3179",
+                    },
+                  ],
+                ],
+              },
+            },
+            {
+              "Action": "sns:Publish",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "SleepAudioPipelineCompletedTopic28BF352F",
+              },
+            },
+            {
+              "Action": "sns:Publish",
+              "Effect": "Allow",
+              "Resource": {
+                "Ref": "SleepAudioPipelineFailedTopicAA49023E",
+              },
+            },
+            {
               "Action": [
                 "logs:CreateLogDelivery",
                 "logs:GetLogDelivery",
@@ -636,6 +733,19 @@ def sort_filter_rules(json_obj):
                 },
               ],
             },
+            {
+              "Action": [
+                "kms:Decrypt",
+                "kms:GenerateDataKey*",
+              ],
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "SnsEncryptionKey25FFF4AF",
+                  "Arn",
+                ],
+              },
+            },
           ],
           "Version": "2012-10-17",
         },
@@ -647,6 +757,43 @@ def sort_filter_rules(json_obj):
         ],
       },
       "Type": "AWS::IAM::Policy",
+    },
+    "SnsEncryptionKey25FFF4AF": {
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "Description": "KMS key for encrypting SNS topics",
+        "EnableKeyRotation": true,
+        "KeyPolicy": {
+          "Statement": [
+            {
+              "Action": "kms:*",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition",
+                      },
+                      ":iam::",
+                      {
+                        "Ref": "AWS::AccountId",
+                      },
+                      ":root",
+                    ],
+                  ],
+                },
+              },
+              "Resource": "*",
+            },
+          ],
+          "Version": "2012-10-17",
+        },
+      },
+      "Type": "AWS::KMS::Key",
+      "UpdateReplacePolicy": "Retain",
     },
     "StateMachineLogGroup15B91BCB": {
       "DeletionPolicy": "Delete",

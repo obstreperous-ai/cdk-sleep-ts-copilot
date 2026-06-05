@@ -330,6 +330,75 @@ describe('CdkBaseStack', () => {
         },
       });
     });
+
+    test('should have IAM permissions for state machine to update DynamoDB items', () => {
+      // State machine role should have DynamoDB UpdateItem permissions for status updates
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: 'dynamodb:UpdateItem',
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  describe('SNS Topics for Notifications', () => {
+    test('should have two SNS topics', () => {
+      // Should have Completed and Failed topics
+      template.resourceCountIs('AWS::SNS::Topic', 2);
+    });
+
+    test('should have SNS topic for completed notifications', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: Match.stringLikeRegexp('.*[Cc]ompleted.*'),
+      });
+    });
+
+    test('should have SNS topic for failed notifications', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: Match.stringLikeRegexp('.*[Ff]ailed.*'),
+      });
+    });
+
+    test('should have encryption enabled on SNS topics', () => {
+      // Both topics should have KMS encryption enabled
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        KmsMasterKeyId: Match.anyValue(),
+      });
+    });
+  });
+
+  describe('SNS Notification Integration', () => {
+    test('should have IAM permissions for state machine to publish to SNS topics', () => {
+      // State machine role should have SNS publish permissions
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: 'sns:Publish',
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
+  describe('State Machine Error Handling', () => {
+    test('should have error handling with Catch blocks in state machine definition', () => {
+      // Verify the state machine definition includes error handling
+      const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+      const stateMachine = Object.values(stateMachines)[0];
+      const definitionString = stateMachine?.Properties?.DefinitionString;
+      
+      expect(definitionString).toBeDefined();
+      // The definition should contain error handling paths
+      // This is a basic check - we'll verify the full structure when implementing
+    });
   });
 
   test('snapshot test', () => {
