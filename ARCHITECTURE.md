@@ -112,22 +112,6 @@ The following foundational components are now implemented and tested:
 - **Input Transformation**: Extracts bucket name and object key from S3 event and passes to state machine
 - **Description**: Documents the rule's purpose for future maintainers
 
-### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issues #4 and #5
-- **Orchestration**: Manages the audio processing workflow with built-in retries and error handling
-- **Definition**: Skeleton workflow: Start → Put Metadata → Polly Task → End
-- **CloudWatch Logs**: Full execution logging enabled (level: ALL, includes execution data)
-- **IAM Role**: Execution role with least-privilege permissions for DynamoDB, Polly, and S3 output bucket
-- **DynamoDB Integration (Issue #5)**: Initial task state that writes metadata record to DynamoDB
-  - Stores audioId (partition key), status, inputBucket, inputKey, createdAt, updatedAt
-  - Status set to `PROCESSING` when workflow starts
-- **Polly Integration**: Task state that invokes `polly:startSpeechSynthesisTask` with placeholder parameters
-  - Output format: MP3
-  - Voice: Joanna (neural voice)
-  - Text: Placeholder narration text
-  - Output location: S3 output bucket
-- **Event-Driven**: Triggered automatically by EventBridge rule on S3 uploads
-- **Input**: Receives bucket name and object key from EventBridge event
-
 ### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issues #4, #5, and #6
 - **Orchestration**: Manages the audio processing workflow with built-in retries and error handling
 - **Definition**: Enhanced workflow with error handling:

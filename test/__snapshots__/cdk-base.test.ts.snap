@@ -510,7 +510,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioMetadataTableD77D3179",
               },
-              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#error":"error"},"ExpressionAttributeValues":{":status":{"S":"FAILED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":error":{"S.$":"$.error"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #error = :error"}},"PublishFailureTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#error":"error"},"ExpressionAttributeValues":{":status":{"S":"FAILED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":error":{"S.$":"States.JsonToString($.error)"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #error = :error"}},"PublishFailureTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },

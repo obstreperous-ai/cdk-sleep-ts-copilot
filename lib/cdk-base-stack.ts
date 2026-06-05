@@ -156,7 +156,7 @@ export class CdkBaseStack extends cdk.Stack {
       expressionAttributeValues: {
         ':status': tasks.DynamoAttributeValue.fromString('FAILED'),
         ':updatedAt': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
-        ':error': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.error')),
+        ':error': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.jsonToString(sfn.JsonPath.objectAt('$.error'))),
       },
       resultPath: '$.updateResult',
     });
@@ -169,7 +169,7 @@ export class CdkBaseStack extends cdk.Stack {
         audioId: sfn.JsonPath.stringAt('$.key'),
         inputBucket: sfn.JsonPath.stringAt('$.bucket'),
         inputKey: sfn.JsonPath.stringAt('$.key'),
-        error: sfn.JsonPath.stringAt('$.error'),
+        error: sfn.JsonPath.objectAt('$.error'),
         failedAt: sfn.JsonPath.stringAt('$$.State.EnteredTime'),
       }),
       resultPath: '$.snsResult',
