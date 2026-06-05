@@ -49,7 +49,7 @@ Design goals:
 | Amazon Polly Integration (TTS) | ✅ Done (Issue #4, skeleton) | `lib/cdk-base-stack.ts` (PollyTask) |
 | Amazon Bedrock Integration (enhancement) | ⬜ Not started | — |
 | Lambda – Output Generation | ⬜ Not started | — |
-| DynamoDB Metadata Table | ⬜ Not started | — |
+| DynamoDB Metadata Table | ✅ Done (Issue #5) | `lib/cdk-base-stack.ts` (SleepAudioMetadataTable) |
 | S3 Output Bucket (versioned) | ✅ Done | `lib/cdk-base-stack.ts` (SleepAudioOutputBucket) |
 | SNS Notification Topic | ⬜ Not started | — |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
@@ -86,7 +86,7 @@ Design goals:
 
 ---
 
-## 4. Implemented Core Components (Issues #3 and #4)
+## 4. Implemented Core Components (Issues #3, #4, and #5)
 
 The following foundational components are now implemented and tested:
 
@@ -112,11 +112,14 @@ The following foundational components are now implemented and tested:
 - **Input Transformation**: Extracts bucket name and object key from S3 event and passes to state machine
 - **Description**: Documents the rule's purpose for future maintainers
 
-### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issue #4
+### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issues #4 and #5
 - **Orchestration**: Manages the audio processing workflow with built-in retries and error handling
-- **Definition**: Simple skeleton workflow: Start → Polly Task → End
+- **Definition**: Skeleton workflow: Start → Put Metadata → Polly Task → End
 - **CloudWatch Logs**: Full execution logging enabled (level: ALL, includes execution data)
-- **IAM Role**: Execution role with least-privilege permissions for Polly and S3 output bucket
+- **IAM Role**: Execution role with least-privilege permissions for DynamoDB, Polly, and S3 output bucket
+- **DynamoDB Integration (Issue #5)**: Initial task state that writes metadata record to DynamoDB
+  - Stores audioId (partition key), status, inputBucket, inputKey, createdAt, updatedAt
+  - Status set to `PROCESSING` when workflow starts
 - **Polly Integration**: Task state that invokes `polly:startSpeechSynthesisTask` with placeholder parameters
   - Output format: MP3
   - Voice: Joanna (neural voice)
@@ -125,11 +128,20 @@ The following foundational components are now implemented and tested:
 - **Event-Driven**: Triggered automatically by EventBridge rule on S3 uploads
 - **Input**: Receives bucket name and object key from EventBridge event
 
+### DynamoDB Metadata Table (SleepAudioMetadataTable) - Issue #5
+- **Partition Key**: `audioId` (string) — unique identifier for each audio processing job
+- **Attributes**: Stores status, inputBucket, inputKey, createdAt, updatedAt
+- **Billing Mode**: On-demand (PAY_PER_REQUEST) — no capacity planning required
+- **Encryption**: AWS-managed server-side encryption (SSE) at rest
+- **Point-in-Time Recovery**: Enabled for data protection and recovery
+- **Retention**: RETAIN policy protects against accidental deletion
+- **IAM**: State machine has scoped DynamoDB:PutItem permission on this table
+
 All components follow AWS best practices:
 - Least-privilege IAM (scoped permissions for each service)
 - Encryption at rest and in transit
 - Private by default (no public access)
-- Infrastructure as code with comprehensive test coverage (23 passing tests)
+- Infrastructure as code with comprehensive test coverage (30 passing tests)
 - Observable via CloudWatch Logs and Step Functions execution history
 
 ---
@@ -154,7 +166,7 @@ All components follow AWS best practices:
 
 ## 6. Mermaid Diagram
 
-> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3 and #4). Components without ✅ are planned for future issues.
+> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3, #4, and #5). Components without ✅ are planned for future issues.
 
 ```mermaid
 flowchart TD
@@ -165,9 +177,11 @@ flowchart TD
 
     subgraph SFN_Detail [✅ Step Functions State Machine - Implemented]
         direction TB
-        POLLY[✅ Polly Task<br/>startSpeechSynthesisTask<br/>Placeholder narration]
+        PUTMETA[✅ Put Metadata Task<br/>DynamoDB PutItem<br/>status: PROCESSING]
+        PUTMETA --> POLLY[✅ Polly Task<br/>startSpeechSynthesisTask<br/>Placeholder narration]
     end
 
+    PUTMETA -.->|Write metadata| DDB[(✅ DynamoDB Table<br/>SleepAudioMetadataTable<br/>on-demand, encrypted, PITR)]
     POLLY -.->|Writes MP3| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted)]
     SFN -.->|Execution logs| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs]
 
@@ -175,7 +189,6 @@ flowchart TD
         direction TB
         V[Validate & Extract Metadata<br/>Lambda] -.-> BED[Amazon Bedrock<br/>Audio Enhancement]
         BED -.-> OUT[Generate Output<br/>Lambda]
-        V -.->|PROCESSING record| DDB[(DynamoDB<br/>Metadata Table)]
         OUT -.->|COMPLETED record| DDB
         SFN -.->|5. Success / failure| SNS{{SNS Topic}}
         SFN -.->|on error / poison event| DLQ[(SQS Dead-Letter Queue)]
@@ -187,14 +200,15 @@ flowchart TD
     style S3out fill:#e07b39,color:#fff,stroke:#000,stroke-width:3px
     style EB fill:#e7157b,color:#fff,stroke:#000,stroke-width:3px
     style SFN fill:#cd2264,color:#fff,stroke:#000,stroke-width:3px
+    style PUTMETA fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
     style POLLY fill:#1b660f,color:#fff,stroke:#000,stroke-width:3px
+    style DDB fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
     style CWLOGS fill:#759c3e,color:#fff,stroke:#000,stroke-width:3px
     style SFN_Detail fill:#f0f0f0,stroke:#cd2264,stroke-width:2px
     style Future fill:#f9f9f9,stroke:#999,stroke-width:1px,stroke-dasharray: 5 5
     style V fill:#f90,color:#000,stroke-dasharray: 5 5
     style OUT fill:#f90,color:#000,stroke-dasharray: 5 5
     style BED fill:#1b660f,color:#fff,stroke-dasharray: 5 5
-    style DDB fill:#4053d6,color:#fff,stroke-dasharray: 5 5
     style SNS fill:#d9534f,color:#fff,stroke-dasharray: 5 5
     style DLQ fill:#aaa,color:#000,stroke-dasharray: 5 5
     style SQSdown fill:#aaa,color:#000,stroke-dasharray: 5 5
@@ -202,11 +216,11 @@ flowchart TD
 ```
 
 **Legend:**
-- ✅ = Implemented and tested (Issues #3 and #4)
+- ✅ = Implemented and tested (Issues #3, #4, and #5)
 - Solid boxes with thick border = Fully implemented and wired components
 - Solid arrows = Active data flow paths
 - Dashed boxes/arrows = Planned for future implementation
-- Current state machine is a skeleton with a single Polly task; full workflow logic will be added in subsequent issues
+- Current state machine: Start → Put Metadata (DynamoDB) → Polly Task → End; full workflow logic will be added in subsequent issues
 
 ---
 

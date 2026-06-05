@@ -6,6 +6,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
 
 export class CdkBaseStack extends cdk.Stack {
@@ -13,6 +14,7 @@ export class CdkBaseStack extends cdk.Stack {
   public readonly outputBucket: s3.Bucket;
   public readonly eventBridgeRule: events.Rule;
   public readonly stateMachine: sfn.StateMachine;
+  public readonly metadataTable: dynamodb.Table;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -36,11 +38,40 @@ export class CdkBaseStack extends cdk.Stack {
       enforceSSL: true,
     });
 
+    // DynamoDB Table - stores audio pipeline metadata
+    this.metadataTable = new dynamodb.Table(this, 'SleepAudioMetadataTable', {
+      partitionKey: {
+        name: 'audioId',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      encryption: dynamodb.TableEncryption.AWS_MANAGED,
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
     // Step Functions State Machine - orchestrates audio processing workflow
     // Log group for state machine execution logs
     const stateMachineLogGroup = new logs.LogGroup(this, 'StateMachineLogGroup', {
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // DynamoDB PutItem Task - writes initial metadata record
+    // Using DynamodbPutItem L2 construct for type-safe DynamoDB integration
+    // TODO: Consider using execution ID or bucket+key combination for unique audioId
+    // to avoid collision if same key is uploaded to different buckets
+    const putMetadataTask = new tasks.DynamoPutItem(this, 'PutMetadataTask', {
+      table: this.metadataTable,
+      item: {
+        audioId: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.key')),
+        status: tasks.DynamoAttributeValue.fromString('PROCESSING'),
+        inputBucket: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.bucket')),
+        inputKey: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.key')),
+        createdAt: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+        updatedAt: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+      },
+      resultPath: '$.metadataResult',
     });
 
     // Polly Task - synthesizes speech from text (placeholder parameters)
@@ -57,8 +88,8 @@ export class CdkBaseStack extends cdk.Stack {
       resultPath: '$.pollyResult',
     });
 
-    // State machine definition: Start -> Polly Task -> End
-    const definition = pollyTask;
+    // State machine definition: Start -> Put Metadata -> Polly Task -> End
+    const definition = putMetadataTask.next(pollyTask);
 
     this.stateMachine = new sfn.StateMachine(this, 'SleepAudioPipelineStateMachine', {
       definitionBody: sfn.DefinitionBody.fromChainable(definition),

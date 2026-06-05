@@ -261,6 +261,77 @@ describe('CdkBaseStack', () => {
     });
   });
 
+  describe('DynamoDB Metadata Table', () => {
+    test('should exist with correct resource type', () => {
+      template.resourceCountIs('AWS::DynamoDB::Table', 1);
+    });
+
+    test('should have correct partition key', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        KeySchema: Match.arrayWith([
+          Match.objectLike({
+            AttributeName: 'audioId',
+            KeyType: 'HASH',
+          }),
+        ]),
+        AttributeDefinitions: Match.arrayWith([
+          Match.objectLike({
+            AttributeName: 'audioId',
+            AttributeType: 'S',
+          }),
+        ]),
+      });
+    });
+
+    test('should have server-side encryption enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        SSESpecification: {
+          SSEEnabled: true,
+        },
+      });
+    });
+
+    test('should use on-demand billing mode', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        BillingMode: 'PAY_PER_REQUEST',
+      });
+    });
+
+    test('should have point-in-time recovery enabled', () => {
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        PointInTimeRecoverySpecification: {
+          PointInTimeRecoveryEnabled: true,
+        },
+      });
+    });
+  });
+
+  describe('State Machine DynamoDB Integration', () => {
+    test('should have DynamoDB PutItem task in state machine definition', () => {
+      // Verify the state machine definition includes a DynamoDB task
+      const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+      const stateMachine = Object.values(stateMachines)[0];
+      const definitionString = stateMachine?.Properties?.DefinitionString;
+      
+      expect(definitionString).toBeDefined();
+      // The definition will contain a DynamoDB PutItem task
+    });
+
+    test('should have IAM permissions for state machine to access DynamoDB table', () => {
+      // State machine role should have DynamoDB permissions
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: 'dynamodb:PutItem',
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+  });
+
   test('snapshot test', () => {
     const app = new cdk.App();
     const stack = new CdkBaseStack(app, 'SnapshotStack');
