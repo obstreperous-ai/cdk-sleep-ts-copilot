@@ -1,0 +1,9 @@
+{
+  "name": "sleep-audio-processor",
+  "version": "1.0.0",
+  "description": "Lambda function for sleep audio processing",
+  "main": "index.ts",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0"
+  }
+}

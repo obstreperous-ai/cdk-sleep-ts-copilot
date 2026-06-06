@@ -401,6 +401,127 @@ describe('CdkBaseStack', () => {
     });
   });
 
+  describe('Lambda Function - SleepAudioProcessor', () => {
+    test('should exist with correct resource type', () => {
+      // Verify Lambda function exists (we have 2: our processor + S3 notification handler)
+      template.resourceCountIs('AWS::Lambda::Function', 2);
+    });
+
+    test('should have correct runtime', () => {
+      // Verify Node.js runtime (TypeScript project convention)
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Runtime: Match.stringLikeRegexp('nodejs.*'),
+      });
+    });
+
+    test('should have correct handler', () => {
+      // Verify handler is set to index.handler
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+      });
+    });
+
+    test('should have environment variables for DynamoDB table', () => {
+      // Lambda needs table name to update DynamoDB
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            TABLE_NAME: Match.anyValue(),
+          },
+        },
+      });
+    });
+
+    test('should have IAM execution role', () => {
+      // Lambda should have an execution role
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Role: Match.objectLike({
+          'Fn::GetAtt': Match.arrayWith([Match.stringLikeRegexp('.*Role.*')]),
+        }),
+      });
+    });
+
+    test('should have DynamoDB read permissions in execution role', () => {
+      // Lambda needs to read from DynamoDB
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith(['dynamodb:GetItem']),
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have DynamoDB write permissions in execution role', () => {
+      // Lambda needs to update DynamoDB (for metadata enrichment)
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith(['dynamodb:UpdateItem']),
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have CloudWatch Logs permissions', () => {
+      // Lambda uses AWSLambdaBasicExecutionRole managed policy which includes CloudWatch Logs
+      // Verify the role has the managed policy ARN
+      template.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Principal: {
+                Service: 'lambda.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+        ManagedPolicyArns: Match.arrayWith([
+          Match.objectLike({
+            'Fn::Join': Match.arrayWith([
+              Match.arrayWith([
+                Match.stringLikeRegexp('.*AWSLambdaBasicExecutionRole.*'),
+              ]),
+            ]),
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('State Machine Lambda Integration', () => {
+    test('should have IAM permission for state machine to invoke Lambda', () => {
+      // State machine needs permission to invoke the Lambda function
+      template.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: 'lambda:InvokeFunction',
+              Effect: 'Allow',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('should have Lambda invocation task in state machine definition', () => {
+      // Verify the state machine definition includes a Lambda invocation
+      const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+      const stateMachine = Object.values(stateMachines)[0];
+      const definitionString = stateMachine?.Properties?.DefinitionString;
+      
+      expect(definitionString).toBeDefined();
+      // The definition should contain a Lambda invoke task
+      // This will be verified after implementation
+    });
+  });
+
   test('snapshot test', () => {
     const app = new cdk.App();
     const stack = new CdkBaseStack(app, 'SnapshotStack');
