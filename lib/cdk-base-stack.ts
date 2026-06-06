@@ -7,6 +7,8 @@ import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
 import * as tasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
 
 export class CdkBaseStack extends cdk.Stack {
@@ -15,6 +17,8 @@ export class CdkBaseStack extends cdk.Stack {
   public readonly eventBridgeRule: events.Rule;
   public readonly stateMachine: sfn.StateMachine;
   public readonly metadataTable: dynamodb.Table;
+  public readonly completedTopic: sns.Topic;
+  public readonly failedTopic: sns.Topic;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -48,6 +52,24 @@ export class CdkBaseStack extends cdk.Stack {
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // KMS Key for SNS topic encryption
+    const snsEncryptionKey = new kms.Key(this, 'SnsEncryptionKey', {
+      enableKeyRotation: true,
+      description: 'KMS key for encrypting SNS topics',
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    // SNS Topics for pipeline notifications
+    this.completedTopic = new sns.Topic(this, 'SleepAudioPipelineCompletedTopic', {
+      displayName: 'Sleep Audio Pipeline Completed',
+      masterKey: snsEncryptionKey,
+    });
+
+    this.failedTopic = new sns.Topic(this, 'SleepAudioPipelineFailedTopic', {
+      displayName: 'Sleep Audio Pipeline Failed',
+      masterKey: snsEncryptionKey,
     });
 
     // Step Functions State Machine - orchestrates audio processing workflow
@@ -88,8 +110,92 @@ export class CdkBaseStack extends cdk.Stack {
       resultPath: '$.pollyResult',
     });
 
-    // State machine definition: Start -> Put Metadata -> Polly Task -> End
-    const definition = putMetadataTask.next(pollyTask);
+    // DynamoDB UpdateItem Task - updates status to COMPLETED on success
+    const updateCompletedStatusTask = new tasks.DynamoUpdateItem(this, 'UpdateCompletedStatusTask', {
+      table: this.metadataTable,
+      key: {
+        audioId: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.key')),
+      },
+      updateExpression: 'SET #status = :status, #updatedAt = :updatedAt',
+      expressionAttributeNames: {
+        '#status': 'status',
+        '#updatedAt': 'updatedAt',
+      },
+      expressionAttributeValues: {
+        ':status': tasks.DynamoAttributeValue.fromString('COMPLETED'),
+        ':updatedAt': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+      },
+      resultPath: '$.updateResult',
+    });
+
+    // SNS Publish Task - sends success notification
+    const publishSuccessTask = new tasks.SnsPublish(this, 'PublishSuccessTask', {
+      topic: this.completedTopic,
+      message: sfn.TaskInput.fromObject({
+        status: 'COMPLETED',
+        audioId: sfn.JsonPath.stringAt('$.key'),
+        inputBucket: sfn.JsonPath.stringAt('$.bucket'),
+        inputKey: sfn.JsonPath.stringAt('$.key'),
+        completedAt: sfn.JsonPath.stringAt('$$.State.EnteredTime'),
+      }),
+      resultPath: '$.snsResult',
+    });
+
+    // DynamoDB UpdateItem Task - updates status to FAILED on error
+    const updateFailedStatusTask = new tasks.DynamoUpdateItem(this, 'UpdateFailedStatusTask', {
+      table: this.metadataTable,
+      key: {
+        audioId: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.key')),
+      },
+      updateExpression: 'SET #status = :status, #updatedAt = :updatedAt, #error = :error',
+      expressionAttributeNames: {
+        '#status': 'status',
+        '#updatedAt': 'updatedAt',
+        '#error': 'error',
+      },
+      expressionAttributeValues: {
+        ':status': tasks.DynamoAttributeValue.fromString('FAILED'),
+        ':updatedAt': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+        ':error': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.jsonToString(sfn.JsonPath.objectAt('$.error'))),
+      },
+      resultPath: '$.updateResult',
+    });
+
+    // SNS Publish Task - sends failure notification
+    const publishFailureTask = new tasks.SnsPublish(this, 'PublishFailureTask', {
+      topic: this.failedTopic,
+      message: sfn.TaskInput.fromObject({
+        status: 'FAILED',
+        audioId: sfn.JsonPath.stringAt('$.key'),
+        inputBucket: sfn.JsonPath.stringAt('$.bucket'),
+        inputKey: sfn.JsonPath.stringAt('$.key'),
+        error: sfn.JsonPath.objectAt('$.error'),
+        failedAt: sfn.JsonPath.stringAt('$$.State.EnteredTime'),
+      }),
+      resultPath: '$.snsResult',
+    });
+
+    // State machine definition with error handling:
+    // Start -> Put Metadata -> Polly Task -> Update Completed Status -> Publish Success
+    // On error: Update Failed Status -> Publish Failure -> End
+    const successPath = pollyTask
+      .next(updateCompletedStatusTask)
+      .next(publishSuccessTask);
+
+    const errorPath = updateFailedStatusTask
+      .next(publishFailureTask);
+
+    // Add error handling (Catch) to the Polly task
+    pollyTask.addCatch(errorPath, {
+      resultPath: '$.error',
+    });
+
+    // Also add error handling to the initial put metadata task
+    putMetadataTask.addCatch(errorPath, {
+      resultPath: '$.error',
+    });
+
+    const definition = putMetadataTask.next(successPath);
 
     this.stateMachine = new sfn.StateMachine(this, 'SleepAudioPipelineStateMachine', {
       definitionBody: sfn.DefinitionBody.fromChainable(definition),
@@ -103,6 +209,10 @@ export class CdkBaseStack extends cdk.Stack {
 
     // Grant the state machine permission to write to the output bucket
     this.outputBucket.grantWrite(this.stateMachine);
+
+    // Grant the state machine permission to publish to SNS topics
+    this.completedTopic.grantPublish(this.stateMachine);
+    this.failedTopic.grantPublish(this.stateMachine);
 
     // EventBridge Rule - triggers on S3 Object Created events
     this.eventBridgeRule = new events.Rule(this, 'S3ObjectCreatedRule', {
