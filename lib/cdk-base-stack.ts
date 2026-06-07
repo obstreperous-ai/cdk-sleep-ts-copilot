@@ -9,7 +9,9 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as kms from 'aws-cdk-lib/aws-kms';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
+import * as path from 'path';
 
 export class CdkBaseStack extends cdk.Stack {
   public readonly inputBucket: s3.Bucket;
@@ -19,6 +21,7 @@ export class CdkBaseStack extends cdk.Stack {
   public readonly metadataTable: dynamodb.Table;
   public readonly completedTopic: sns.Topic;
   public readonly failedTopic: sns.Topic;
+  public readonly audioProcessorFunction: lambda.Function;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -72,6 +75,22 @@ export class CdkBaseStack extends cdk.Stack {
       masterKey: snsEncryptionKey,
     });
 
+    // Lambda Function - SleepAudioProcessor
+    // Basic Lambda function skeleton for audio processing
+    this.audioProcessorFunction = new lambda.Function(this, 'SleepAudioProcessor', {
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'index.handler',
+      code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/sleep-audio-processor')),
+      environment: {
+        TABLE_NAME: this.metadataTable.tableName,
+      },
+      timeout: cdk.Duration.seconds(60),
+      description: 'Processes and enriches audio metadata',
+    });
+
+    // Grant Lambda permissions to access DynamoDB
+    this.metadataTable.grantReadWriteData(this.audioProcessorFunction);
+
     // Step Functions State Machine - orchestrates audio processing workflow
     // Log group for state machine execution logs
     const stateMachineLogGroup = new logs.LogGroup(this, 'StateMachineLogGroup', {
@@ -94,6 +113,17 @@ export class CdkBaseStack extends cdk.Stack {
         updatedAt: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
       },
       resultPath: '$.metadataResult',
+    });
+
+    // Lambda Invoke Task - processes and enriches audio metadata
+    const audioProcessorTask = new tasks.LambdaInvoke(this, 'AudioProcessorTask', {
+      lambdaFunction: this.audioProcessorFunction,
+      payload: sfn.TaskInput.fromObject({
+        bucket: sfn.JsonPath.stringAt('$.bucket'),
+        key: sfn.JsonPath.stringAt('$.key'),
+        audioId: sfn.JsonPath.stringAt('$.key'),
+      }),
+      resultPath: '$.audioProcessorResult',
     });
 
     // Polly Task - synthesizes speech from text (placeholder parameters)
@@ -176,14 +206,20 @@ export class CdkBaseStack extends cdk.Stack {
     });
 
     // State machine definition with error handling:
-    // Start -> Put Metadata -> Polly Task -> Update Completed Status -> Publish Success
+    // Start -> Put Metadata -> Audio Processor Lambda -> Polly Task -> Update Completed Status -> Publish Success
     // On error: Update Failed Status -> Publish Failure -> End
-    const successPath = pollyTask
+    const successPath = audioProcessorTask
+      .next(pollyTask)
       .next(updateCompletedStatusTask)
       .next(publishSuccessTask);
 
     const errorPath = updateFailedStatusTask
       .next(publishFailureTask);
+
+    // Add error handling (Catch) to the Lambda processor task
+    audioProcessorTask.addCatch(errorPath, {
+      resultPath: '$.error',
+    });
 
     // Add error handling (Catch) to the Polly task
     pollyTask.addCatch(errorPath, {
