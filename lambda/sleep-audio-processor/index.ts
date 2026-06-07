@@ -2,8 +2,8 @@
  * Sleep Audio Processor Lambda
  * 
  * Basic Lambda function skeleton for audio processing pipeline.
- * Receives input from Step Functions state machine, logs it, and returns
- * enriched metadata.
+ * Receives input from Step Functions state machine, validates input,
+ * logs it, and returns enriched metadata.
  * 
  * This is a minimal placeholder for future audio processing, metadata enrichment,
  * or validation logic.
@@ -13,6 +13,9 @@ import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 
 const dynamoDbClient = new DynamoDBClient({});
 const TABLE_NAME = process.env.TABLE_NAME;
+
+// Supported audio file extensions
+const SUPPORTED_AUDIO_FORMATS = ['.mp3', '.wav', '.m4a', '.ogg', '.flac'];
 
 interface AudioProcessorEvent {
   bucket: string;
@@ -28,7 +31,33 @@ interface AudioProcessorResult {
   enrichedMetadata?: {
     processingTimestamp: string;
     processor: string;
+    fileExtension?: string;
   };
+}
+
+/**
+ * Validates the input event for required fields and valid audio format
+ */
+function validateInput(event: AudioProcessorEvent): { valid: boolean; error?: string } {
+  // Validate required fields
+  if (!event.bucket || typeof event.bucket !== 'string' || event.bucket.trim() === '') {
+    return { valid: false, error: 'Missing or invalid required field: bucket' };
+  }
+  
+  if (!event.key || typeof event.key !== 'string' || event.key.trim() === '') {
+    return { valid: false, error: 'Missing or invalid required field: key' };
+  }
+  
+  // Validate file extension
+  const fileExtension = event.key.toLowerCase().substring(event.key.lastIndexOf('.'));
+  if (!SUPPORTED_AUDIO_FORMATS.includes(fileExtension)) {
+    return { 
+      valid: false, 
+      error: `Unsupported audio format: ${fileExtension}. Supported formats: ${SUPPORTED_AUDIO_FORMATS.join(', ')}` 
+    };
+  }
+  
+  return { valid: true };
 }
 
 /**
@@ -38,12 +67,20 @@ export async function handler(event: AudioProcessorEvent): Promise<AudioProcesso
   console.log('Sleep Audio Processor invoked with event:', JSON.stringify(event, null, 2));
   
   try {
+    // Input validation
+    const validation = validateInput(event);
+    if (!validation.valid) {
+      console.error('Input validation failed:', validation.error);
+      throw new Error(validation.error);
+    }
+    
     // Extract input data
     const { bucket, key } = event;
     const audioId = key; // Using key as audioId (consistent with state machine)
+    const fileExtension = key.toLowerCase().substring(key.lastIndexOf('.'));
     
     // Log the input for observability
-    console.log(`Processing audio: bucket=${bucket}, key=${key}, audioId=${audioId}`);
+    console.log(`Processing audio: bucket=${bucket}, key=${key}, audioId=${audioId}, extension=${fileExtension}`);
     
     // Optionally update DynamoDB with processing status
     if (TABLE_NAME) {
@@ -54,14 +91,16 @@ export async function handler(event: AudioProcessorEvent): Promise<AudioProcesso
           Key: {
             audioId: { S: audioId },
           },
-          UpdateExpression: 'SET #processor = :processor, #processedAt = :processedAt',
+          UpdateExpression: 'SET #processor = :processor, #processedAt = :processedAt, #fileExtension = :fileExtension',
           ExpressionAttributeNames: {
             '#processor': 'processor',
             '#processedAt': 'processedAt',
+            '#fileExtension': 'fileExtension',
           },
           ExpressionAttributeValues: {
             ':processor': { S: 'SleepAudioProcessor' },
             ':processedAt': { S: new Date().toISOString() },
+            ':fileExtension': { S: fileExtension },
           },
         });
         await dynamoDbClient.send(updateCommand);
@@ -80,6 +119,7 @@ export async function handler(event: AudioProcessorEvent): Promise<AudioProcesso
       enrichedMetadata: {
         processingTimestamp: new Date().toISOString(),
         processor: 'SleepAudioProcessor',
+        fileExtension,
       },
     };
     
