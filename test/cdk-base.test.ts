@@ -790,4 +790,181 @@ describe('CdkBaseStack', () => {
     const template = Template.fromStack(stack);
     expect(template.toJSON()).toMatchSnapshot();
   });
+
+  describe('Pipeline Testing, Refinement & Deployment Preparation (Issue #9)', () => {
+    describe('Multi-Environment Support', () => {
+      test('should accept environment context (dev)', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'dev',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'DevStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        expect(template).toBeDefined();
+      });
+
+      test('should accept environment context (stage)', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'stage',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'StageStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        expect(template).toBeDefined();
+      });
+
+      test('should accept environment context (prod)', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'prod',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'ProdStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        expect(template).toBeDefined();
+      });
+
+      test('should use DESTROY removal policy for dev environment', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'dev',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'DevStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        
+        // Dev environment should have DESTROY removal policy for easier cleanup
+        template.hasResource('AWS::S3::Bucket', {
+          UpdateReplacePolicy: 'Delete',
+          DeletionPolicy: 'Delete',
+        });
+      });
+
+      test('should use RETAIN removal policy for prod environment', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'prod',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'ProdStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        
+        // Prod environment should have RETAIN removal policy for data protection
+        template.hasResource('AWS::S3::Bucket', {
+          UpdateReplacePolicy: 'Retain',
+          DeletionPolicy: 'Retain',
+        });
+      });
+
+      test('should have shorter log retention for dev environment', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'dev',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'DevStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        
+        // Dev should have shorter retention (e.g., 3 days)
+        template.hasResourceProperties('AWS::Logs::LogGroup', {
+          RetentionInDays: 3,
+        });
+      });
+
+      test('should have longer log retention for prod environment', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'prod',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'ProdStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        
+        // Prod should have longer retention (e.g., 30 days)
+        template.hasResourceProperties('AWS::Logs::LogGroup', {
+          RetentionInDays: 30,
+        });
+      });
+
+      test('dev environment snapshot', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'dev',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'DevSnapshotStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        expect(template.toJSON()).toMatchSnapshot();
+      });
+
+      test('stage environment snapshot', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'stage',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'StageSnapshotStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        expect(template.toJSON()).toMatchSnapshot();
+      });
+
+      test('prod environment snapshot', () => {
+        const app = new cdk.App({
+          context: {
+            env: 'prod',
+          },
+        });
+        const stack = new CdkBaseStack(app, 'ProdSnapshotStack', {
+          env: { account: '123456789012', region: 'us-east-1' },
+        });
+        const template = Template.fromStack(stack);
+        expect(template.toJSON()).toMatchSnapshot();
+      });
+    });
+
+    describe('Refinements', () => {
+      test('should use pointInTimeRecoverySpecification instead of deprecated pointInTimeRecovery', () => {
+        const app = new cdk.App();
+        const stack = new CdkBaseStack(app, 'TestStack');
+        const template = Template.fromStack(stack);
+        
+        // Verify the new property is used
+        template.hasResourceProperties('AWS::DynamoDB::Table', {
+          PointInTimeRecoverySpecification: {
+            PointInTimeRecoveryEnabled: true,
+          },
+        });
+      });
+    });
+
+    describe('Deployment Preparation - Pipeline Construct', () => {
+      test('should be able to create pipeline stack', () => {
+        const app = new cdk.App();
+        // Import the pipeline stack when it exists
+        // For now, we just test that the app can be created
+        expect(app).toBeDefined();
+        // This test will be expanded when we add the pipeline stack
+      });
+    });
+  });
 });

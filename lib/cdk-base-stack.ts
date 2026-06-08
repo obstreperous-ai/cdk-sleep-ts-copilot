@@ -13,6 +13,40 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
+/**
+ * Environment-specific configuration for the Sleep Audio Pipeline
+ */
+interface EnvironmentConfig {
+  removalPolicy: cdk.RemovalPolicy;
+  logRetention: logs.RetentionDays;
+}
+
+/**
+ * Get environment-specific configuration based on CDK context
+ */
+function getEnvironmentConfig(scope: Construct): EnvironmentConfig {
+  const env = scope.node.tryGetContext('env') || 'dev';
+  
+  switch (env) {
+    case 'prod':
+      return {
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        logRetention: logs.RetentionDays.ONE_MONTH,
+      };
+    case 'stage':
+      return {
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      };
+    case 'dev':
+    default:
+      return {
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        logRetention: logs.RetentionDays.THREE_DAYS,
+      };
+  }
+}
+
 export class CdkBaseStack extends cdk.Stack {
   public readonly inputBucket: s3.Bucket;
   public readonly outputBucket: s3.Bucket;
@@ -26,13 +60,16 @@ export class CdkBaseStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
+    // Get environment-specific configuration
+    const envConfig = getEnvironmentConfig(this);
+
     // Input S3 Bucket - receives raw audio uploads
     this.inputBucket = new s3.Bucket(this, 'SleepAudioInputBucket', {
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       eventBridgeEnabled: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: envConfig.removalPolicy,
       enforceSSL: true,
     });
 
@@ -41,7 +78,7 @@ export class CdkBaseStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       versioned: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: envConfig.removalPolicy,
       enforceSSL: true,
     });
 
@@ -53,15 +90,17 @@ export class CdkBaseStack extends cdk.Stack {
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       encryption: dynamodb.TableEncryption.AWS_MANAGED,
-      pointInTimeRecovery: true,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: true,
+      },
+      removalPolicy: envConfig.removalPolicy,
     });
 
     // KMS Key for SNS topic encryption
     const snsEncryptionKey = new kms.Key(this, 'SnsEncryptionKey', {
       enableKeyRotation: true,
       description: 'KMS key for encrypting SNS topics',
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      removalPolicy: envConfig.removalPolicy,
     });
 
     // SNS Topics for pipeline notifications
@@ -94,7 +133,7 @@ export class CdkBaseStack extends cdk.Stack {
     // Step Functions State Machine - orchestrates audio processing workflow
     // Log group for state machine execution logs
     const stateMachineLogGroup = new logs.LogGroup(this, 'StateMachineLogGroup', {
-      retention: logs.RetentionDays.ONE_WEEK,
+      retention: envConfig.logRetention,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
