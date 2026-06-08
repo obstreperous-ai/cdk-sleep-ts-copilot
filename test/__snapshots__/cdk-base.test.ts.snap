@@ -805,7 +805,7 @@ def sort_filter_rules(json_obj):
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "36b38e6a5dcbee570670198654b2fa6ad1dfa2663a935c3f34c3267989d193dd.zip",
+          "S3Key": "a03fd202a0e0fa1b1b8af22a7859f77099a928523f581d4857e5596ab0926b50.zip",
         },
         "Description": "Processes and enriches audio metadata",
         "Environment": {
