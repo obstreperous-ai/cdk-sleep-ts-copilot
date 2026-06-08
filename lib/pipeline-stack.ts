@@ -67,17 +67,20 @@ export class PipelineStack extends cdk.Stack {
 /**
  * Pipeline Stage that deploys the application stack
  * 
- * This stage encapsulates the application stack and can be deployed to different environments
+ * This stage encapsulates the application stack and can be deployed to different environments.
+ * The stageName is passed to child constructs via the stage's context.
  */
 export class PipelineStage extends cdk.Stage {
   constructor(scope: Construct, id: string, props: cdk.StageProps & { stageName: string }) {
     super(scope, id, props);
 
-    // Deploy the main application stack with environment context
+    // Deploy the main application stack
+    // Note: The stack will read the environment from the Stage's context
+    // which is set by the parent (either the App or the Pipeline)
+    // The stageName parameter here is for documentation and future use
+    // when the pipeline is fully implemented with source integration
     new CdkBaseStack(this, 'SleepAudioStack', {
       ...props,
-      // The stageName will be passed to the stack via context
-      // This allows the stack to configure itself based on the environment
     });
   }
 }

@@ -44,17 +44,24 @@ describe('PipelineStack', () => {
     });
 
     test('should support different stage names', () => {
-      const app = new cdk.App({
+      // Create separate App instances to avoid context conflicts
+      // Each stage should be able to configure itself independently
+      const devApp = new cdk.App({
         context: {
-          env: 'prod',
+          env: 'dev',
         },
       });
-      const devStage = new PipelineStage(app, 'DevStage', {
+      const devStage = new PipelineStage(devApp, 'DevStage', {
         env: { account: '123456789012', region: 'us-east-1' },
         stageName: 'dev',
       });
       
-      const prodStage = new PipelineStage(app, 'ProdStage', {
+      const prodApp = new cdk.App({
+        context: {
+          env: 'prod',
+        },
+      });
+      const prodStage = new PipelineStage(prodApp, 'ProdStage', {
         env: { account: '123456789012', region: 'us-east-1' },
         stageName: 'prod',
       });
