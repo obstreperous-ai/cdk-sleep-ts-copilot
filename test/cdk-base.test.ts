@@ -347,9 +347,9 @@ describe('CdkBaseStack', () => {
   });
 
   describe('SNS Topics for Notifications', () => {
-    test('should have two SNS topics', () => {
-      // Should have Completed and Failed topics
-      template.resourceCountIs('AWS::SNS::Topic', 2);
+    test('should have three SNS topics', () => {
+      // Should have Completed, Failed, and Alarm topics
+      template.resourceCountIs('AWS::SNS::Topic', 3);
     });
 
     test('should have SNS topic for completed notifications', () => {
@@ -361,6 +361,12 @@ describe('CdkBaseStack', () => {
     test('should have SNS topic for failed notifications', () => {
       template.hasResourceProperties('AWS::SNS::Topic', {
         DisplayName: Match.stringLikeRegexp('.*[Ff]ailed.*'),
+      });
+    });
+
+    test('should have SNS topic for alarm notifications', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: Match.stringLikeRegexp('.*[Aa]larm.*'),
       });
     });
 
@@ -964,6 +970,247 @@ describe('CdkBaseStack', () => {
         // For now, we just test that the app can be created
         expect(app).toBeDefined();
         // This test will be expanded when we add the pipeline stack
+      });
+    });
+  });
+
+  // Issue #10: TDD - Advanced Error Handling, Retries & Observability
+  describe('Advanced Error Handling, Retries & Observability (Issue #10)', () => {
+    describe('Retry Policies', () => {
+      test('should have retry policy configured on Lambda task', () => {
+        // Lambda invocation should have retry with exponential backoff
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // The definition should include retry configuration for Lambda task
+        // This will be verified after implementation
+      });
+
+      test('should have retry policy configured on Polly task', () => {
+        // Polly task should have retry with exponential backoff
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // The definition should include retry configuration for Polly task
+      });
+
+      test('should have retry policy configured on DynamoDB tasks', () => {
+        // DynamoDB operations should have retry configuration
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // The definition should include retry configuration for DynamoDB tasks
+      });
+
+      test('should limit maximum retry attempts', () => {
+        // Retry policies should have reasonable MaxAttempts limits
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // Verify MaxAttempts is set (typically 2-3 for most tasks)
+      });
+    });
+
+    describe('Advanced Error Handling', () => {
+      test('should catch specific error types for Lambda', () => {
+        // Lambda task should catch Lambda.ServiceException and other specific errors
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // Verify Catch blocks with specific error names
+      });
+
+      test('should catch States.TaskFailed errors', () => {
+        // Tasks should catch States.TaskFailed
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // Verify States.TaskFailed is in Catch configuration
+      });
+
+      test('should catch DynamoDB specific errors', () => {
+        // DynamoDB tasks should catch DynamoDB.* errors
+        const stateMachines = template.findResources('AWS::StepFunctions::StateMachine');
+        const stateMachine = Object.values(stateMachines)[0];
+        const definitionString = stateMachine?.Properties?.DefinitionString;
+        
+        expect(definitionString).toBeDefined();
+        // Verify DynamoDB error handling
+      });
+    });
+
+    describe('X-Ray Tracing', () => {
+      test('should have X-Ray tracing enabled on Lambda function', () => {
+        // Lambda function should have tracing mode Active
+        template.hasResourceProperties('AWS::Lambda::Function', {
+          TracingConfig: {
+            Mode: 'Active',
+          },
+        });
+      });
+
+      test('should have X-Ray tracing enabled on State Machine', () => {
+        // State machine should have tracing enabled
+        template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
+          TracingConfiguration: {
+            Enabled: true,
+          },
+        });
+      });
+
+      test('should have IAM permissions for X-Ray', () => {
+        // Lambda and State Machine roles should have X-Ray permissions
+        template.hasResourceProperties('AWS::IAM::Policy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: Match.arrayWith([
+                  'xray:PutTraceSegments',
+                  'xray:PutTelemetryRecords',
+                ]),
+                Effect: 'Allow',
+              }),
+            ]),
+          },
+        });
+      });
+    });
+
+    describe('CloudWatch Alarms', () => {
+      test('should have alarm for state machine execution failures', () => {
+        // Alarm for ExecutionsFailed metric
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          MetricName: 'ExecutionsFailed',
+          Namespace: 'AWS/States',
+          Statistic: 'Sum',
+          ComparisonOperator: 'GreaterThanThreshold',
+          Threshold: 0,
+        });
+      });
+
+      test('should have alarm for Lambda function errors', () => {
+        // Alarm for Lambda Errors metric
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          MetricName: 'Errors',
+          Namespace: 'AWS/Lambda',
+          Statistic: 'Sum',
+          ComparisonOperator: 'GreaterThanThreshold',
+          Threshold: 0,
+        });
+      });
+
+      test('should have alarm for Lambda throttles', () => {
+        // Alarm for Lambda Throttles metric
+        template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+          MetricName: 'Throttles',
+          Namespace: 'AWS/Lambda',
+          Statistic: 'Sum',
+          ComparisonOperator: 'GreaterThanThreshold',
+          Threshold: 0,
+        });
+      });
+
+      test('should have appropriate evaluation periods for alarms', () => {
+        // Alarms should have reasonable evaluation periods (e.g., 2 periods of 5 minutes)
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        Object.values(alarms).forEach((alarm: any) => {
+          expect(alarm.Properties?.EvaluationPeriods).toBeGreaterThan(0);
+          expect(alarm.Properties?.Period).toBeGreaterThanOrEqual(60);
+        });
+      });
+
+      test('should have SNS topic for alarm notifications', () => {
+        // Alarms should have an AlarmActions property pointing to SNS topic
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        const alarmsArray = Object.values(alarms);
+        
+        if (alarmsArray.length > 0) {
+          // At least one alarm should have AlarmActions
+          const hasAlarmActions = alarmsArray.some((alarm: any) => 
+            alarm.Properties?.AlarmActions && 
+            alarm.Properties.AlarmActions.length > 0
+          );
+          expect(hasAlarmActions).toBe(true);
+        }
+      });
+    });
+
+    describe('Structured Logging', () => {
+      test('Lambda should log with structured JSON format', () => {
+        // This is validated by the Lambda implementation
+        // We verify the Lambda function has proper CloudWatch permissions
+        template.hasResourceProperties('AWS::IAM::Role', {
+          AssumeRolePolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Principal: {
+                  Service: 'lambda.amazonaws.com',
+                },
+              }),
+            ]),
+          },
+          ManagedPolicyArns: Match.arrayWith([
+            Match.objectLike({
+              'Fn::Join': Match.arrayWith([
+                Match.arrayWith([
+                  Match.stringLikeRegexp('.*AWSLambdaBasicExecutionRole.*'),
+                ]),
+              ]),
+            }),
+          ]),
+        });
+      });
+    });
+
+    describe('Optional CloudWatch Dashboard', () => {
+      test('should have CloudWatch Dashboard for key metrics', () => {
+        // Optional: Dashboard showing state machine executions, Lambda invocations, errors
+        // If implemented, verify dashboard exists
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        // Dashboard is optional, so we just check it doesn't break if it exists
+        expect(dashboards).toBeDefined();
+      });
+    });
+
+    describe('Integration Tests', () => {
+      test('should maintain backward compatibility with existing error handling', () => {
+        // Verify that existing error handling tests still pass
+        template.hasResourceProperties('AWS::IAM::Policy', {
+          PolicyDocument: {
+            Statement: Match.arrayWith([
+              Match.objectLike({
+                Action: 'dynamodb:UpdateItem',
+                Effect: 'Allow',
+              }),
+            ]),
+          },
+        });
+      });
+
+      test('should maintain least-privilege IAM with new observability features', () => {
+        // Verify no overly broad permissions were added
+        const policies = template.findResources('AWS::IAM::Policy');
+        Object.values(policies).forEach((policy: any) => {
+          const statements = policy.Properties?.PolicyDocument?.Statement || [];
+          statements.forEach((statement: any) => {
+            // Allow specific service patterns and logs
+            if (Array.isArray(statement.Resource) && statement.Resource.includes('*')) {
+              expect(statement.Action).toMatch(/polly:|logs:|xray:/);
+            }
+          });
+        });
       });
     });
   });

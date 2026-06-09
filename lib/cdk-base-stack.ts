@@ -10,6 +10,8 @@ import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -56,6 +58,7 @@ export class CdkBaseStack extends cdk.Stack {
   public readonly completedTopic: sns.Topic;
   public readonly failedTopic: sns.Topic;
   public readonly audioProcessorFunction: lambda.Function;
+  public readonly alarmTopic: sns.Topic;
 
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
@@ -114,8 +117,14 @@ export class CdkBaseStack extends cdk.Stack {
       masterKey: snsEncryptionKey,
     });
 
+    // SNS Topic for CloudWatch Alarms
+    this.alarmTopic = new sns.Topic(this, 'SleepAudioPipelineAlarmTopic', {
+      displayName: 'Sleep Audio Pipeline Alarms',
+      masterKey: snsEncryptionKey,
+    });
+
     // Lambda Function - SleepAudioProcessor
-    // Basic Lambda function skeleton for audio processing
+    // Basic Lambda function skeleton for audio processing with X-Ray tracing
     this.audioProcessorFunction = new lambda.Function(this, 'SleepAudioProcessor', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
@@ -125,6 +134,7 @@ export class CdkBaseStack extends cdk.Stack {
       },
       timeout: cdk.Duration.seconds(60),
       description: 'Processes and enriches audio metadata',
+      tracing: lambda.Tracing.ACTIVE,
     });
 
     // Grant Lambda permissions to access DynamoDB
@@ -152,6 +162,11 @@ export class CdkBaseStack extends cdk.Stack {
         updatedAt: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
       },
       resultPath: '$.metadataResult',
+    }).addRetry({
+      errors: ['DynamoDB.ProvisionedThroughputExceededException', 'States.TaskFailed'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
     });
 
     // Lambda Invoke Task - processes and enriches audio metadata
@@ -163,6 +178,11 @@ export class CdkBaseStack extends cdk.Stack {
         audioId: sfn.JsonPath.stringAt('$.key'),
       }),
       resultPath: '$.audioProcessorResult',
+    }).addRetry({
+      errors: ['Lambda.ServiceException', 'Lambda.TooManyRequestsException', 'States.TaskFailed'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
     });
 
     // Polly Task - synthesizes speech from text (placeholder parameters)
@@ -177,6 +197,11 @@ export class CdkBaseStack extends cdk.Stack {
       },
       iamResources: ['*'],
       resultPath: '$.pollyResult',
+    }).addRetry({
+      errors: ['Polly.ServiceException', 'States.TaskFailed'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
     });
 
     // DynamoDB UpdateItem Task - updates status to COMPLETED on success
@@ -195,6 +220,11 @@ export class CdkBaseStack extends cdk.Stack {
         ':updatedAt': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
       },
       resultPath: '$.updateResult',
+    }).addRetry({
+      errors: ['DynamoDB.ProvisionedThroughputExceededException', 'States.TaskFailed'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
     });
 
     // SNS Publish Task - sends success notification
@@ -228,6 +258,11 @@ export class CdkBaseStack extends cdk.Stack {
         ':error': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.jsonToString(sfn.JsonPath.objectAt('$.error'))),
       },
       resultPath: '$.updateResult',
+    }).addRetry({
+      errors: ['DynamoDB.ProvisionedThroughputExceededException', 'States.TaskFailed'],
+      interval: cdk.Duration.seconds(2),
+      maxAttempts: 3,
+      backoffRate: 2,
     });
 
     // SNS Publish Task - sends failure notification
@@ -255,18 +290,21 @@ export class CdkBaseStack extends cdk.Stack {
     const errorPath = updateFailedStatusTask
       .next(publishFailureTask);
 
-    // Add error handling (Catch) to the Lambda processor task
+    // Add advanced error handling (Catch) with specific error types to the Lambda processor task
     audioProcessorTask.addCatch(errorPath, {
+      errors: ['Lambda.ServiceException', 'Lambda.TooManyRequestsException', 'States.TaskFailed'],
       resultPath: '$.error',
     });
 
-    // Add error handling (Catch) to the Polly task
+    // Add advanced error handling (Catch) with specific error types to the Polly task
     pollyTask.addCatch(errorPath, {
+      errors: ['Polly.ServiceException', 'States.TaskFailed'],
       resultPath: '$.error',
     });
 
-    // Also add error handling to the initial put metadata task
+    // Also add advanced error handling to the initial put metadata task
     putMetadataTask.addCatch(errorPath, {
+      errors: ['DynamoDB.ProvisionedThroughputExceededException', 'States.TaskFailed'],
       resultPath: '$.error',
     });
 
@@ -279,7 +317,7 @@ export class CdkBaseStack extends cdk.Stack {
         level: sfn.LogLevel.ALL,
         includeExecutionData: true,
       },
-      tracingEnabled: false,
+      tracingEnabled: true,
     });
 
     // Grant the state machine permission to write to the output bucket
@@ -314,5 +352,52 @@ export class CdkBaseStack extends cdk.Stack {
         }),
       })
     );
+
+    // CloudWatch Alarms for Observability (Issue #10)
+    
+    // Alarm for State Machine Execution Failures
+    const stateMachineFailureAlarm = new cloudwatch.Alarm(this, 'StateMachineExecutionFailuresAlarm', {
+      alarmName: 'SleepAudioPipeline-StateMachineFailures',
+      alarmDescription: 'Alerts when state machine executions fail',
+      metric: this.stateMachine.metricFailed({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 0,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    stateMachineFailureAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
+
+    // Alarm for Lambda Function Errors
+    const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaFunctionErrorsAlarm', {
+      alarmName: 'SleepAudioPipeline-LambdaErrors',
+      alarmDescription: 'Alerts when Lambda function errors occur',
+      metric: this.audioProcessorFunction.metricErrors({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 0,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    lambdaErrorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
+
+    // Alarm for Lambda Function Throttles
+    const lambdaThrottleAlarm = new cloudwatch.Alarm(this, 'LambdaFunctionThrottlesAlarm', {
+      alarmName: 'SleepAudioPipeline-LambdaThrottles',
+      alarmDescription: 'Alerts when Lambda function is throttled',
+      metric: this.audioProcessorFunction.metricThrottles({
+        statistic: 'Sum',
+        period: cdk.Duration.minutes(5),
+      }),
+      threshold: 0,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+    });
+    lambdaThrottleAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.alarmTopic));
   }
 }
