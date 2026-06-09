@@ -1205,9 +1205,14 @@ describe('CdkBaseStack', () => {
         Object.values(policies).forEach((policy: any) => {
           const statements = policy.Properties?.PolicyDocument?.Statement || [];
           statements.forEach((statement: any) => {
-            // Allow specific service patterns and logs
+            // Allow specific service patterns for wildcard resources (logs, xray, polly)
             if (Array.isArray(statement.Resource) && statement.Resource.includes('*')) {
-              expect(statement.Action).toMatch(/polly:|logs:|xray:/);
+              // Ensure actions are from allowed services only
+              const actions = Array.isArray(statement.Action) ? statement.Action : [statement.Action];
+              actions.forEach((action: string) => {
+                // Action must start with allowed service prefix
+                expect(action).toMatch(/^(polly:|logs:|xray:)/);
+              });
             }
           });
         });

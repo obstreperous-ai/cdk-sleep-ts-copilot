@@ -865,7 +865,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "483c0418592e27b64404107670797f88b1bbad9f7522bef101b577969f7cb9c2.zip",
+          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
         },
         "Description": "Processes and enriches audio metadata",
         "Environment": {
@@ -1948,7 +1948,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "483c0418592e27b64404107670797f88b1bbad9f7522bef101b577969f7cb9c2.zip",
+          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
         },
         "Description": "Processes and enriches audio metadata",
         "Environment": {
@@ -3031,7 +3031,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "483c0418592e27b64404107670797f88b1bbad9f7522bef101b577969f7cb9c2.zip",
+          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
         },
         "Description": "Processes and enriches audio metadata",
         "Environment": {
@@ -4132,7 +4132,7 @@ def sort_filter_rules(json_obj):
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "483c0418592e27b64404107670797f88b1bbad9f7522bef101b577969f7cb9c2.zip",
+          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
         },
         "Description": "Processes and enriches audio metadata",
         "Environment": {

@@ -63,9 +63,9 @@ function validateInput(event: AudioProcessorEvent): { valid: boolean; error?: st
 /**
  * Lambda handler for audio processing with structured logging
  */
-export async function handler(event: AudioProcessorEvent): Promise<AudioProcessorResult> {
-  // Structured logging: Start with JSON-formatted log
-  const requestId = Math.random().toString(36).substring(7); // Simple request ID
+export async function handler(event: AudioProcessorEvent, context: any): Promise<AudioProcessorResult> {
+  // Structured logging: Use AWS Lambda context requestId for correlation
+  const requestId = context.awsRequestId;
   console.log(JSON.stringify({
     level: 'INFO',
     requestId,
