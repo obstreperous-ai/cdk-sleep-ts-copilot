@@ -45,18 +45,19 @@ Design goals:
 | CDK Pipeline skeleton | ✅ Done (Issue #9) | `lib/pipeline-stack.ts` |
 | S3 Input Bucket | ✅ Done (Issue #3) | `lib/cdk-base-stack.ts` (SleepAudioInputBucket) |
 | EventBridge Rule (S3 → Step Functions) | ✅ Done (Issue #3) | `lib/cdk-base-stack.ts` (S3ObjectCreatedRule) |
-| Step Functions Orchestrator | ✅ Done (Issues #4, #6, #7, #8) | `lib/cdk-base-stack.ts` (SleepAudioPipelineStateMachine) |
-| Lambda – Audio Processor with Input Validation | ✅ Done (Issues #7, #8) | `lib/cdk-base-stack.ts` (SleepAudioProcessor), `lambda/sleep-audio-processor/` |
+| Step Functions Orchestrator | ✅ Done (Issues #4, #6, #7, #8, #10) | `lib/cdk-base-stack.ts` (SleepAudioPipelineStateMachine) |
+| Lambda – Audio Processor with Input Validation | ✅ Done (Issues #7, #8, #10) | `lib/cdk-base-stack.ts` (SleepAudioProcessor), `lambda/sleep-audio-processor/` |
 | Amazon Polly Integration (TTS) | ✅ Done (Issue #4, skeleton) | `lib/cdk-base-stack.ts` (PollyTask) |
 | Amazon Bedrock Integration (enhancement) | ⬜ Not started | — |
 | Lambda – Output Generation | ⬜ Not started | — |
 | DynamoDB Metadata Table | ✅ Done (Issue #5) | `lib/cdk-base-stack.ts` (SleepAudioMetadataTable) |
 | S3 Output Bucket (versioned) | ✅ Done (Issue #3) | `lib/cdk-base-stack.ts` (SleepAudioOutputBucket) |
-| SNS Notification Topics | ✅ Done (Issue #6) | `lib/cdk-base-stack.ts` (SleepAudioPipelineCompletedTopic, SleepAudioPipelineFailedTopic) |
+| SNS Notification Topics | ✅ Done (Issues #6, #10) | `lib/cdk-base-stack.ts` (SleepAudioPipelineCompletedTopic, SleepAudioPipelineFailedTopic, SleepAudioPipelineAlarmTopic) |
 | Complete Pipeline Wiring & Input Validation | ✅ Done (Issue #8) | All components integrated end-to-end |
 | Pipeline Testing & Refinements | ✅ Done (Issue #9) | Environment-aware configuration, deprecation fixes |
+| Advanced Error Handling & Retries | ✅ Done (Issue #10) | Retry policies with exponential backoff, specific error type handling |
+| X-Ray Tracing & Observability | ✅ Done (Issue #10) | X-Ray on Lambda + State Machine, structured logging, CloudWatch Alarms |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
-| CloudWatch Alarms | ⬜ Not started | — |
 
 > This table **must** be updated in the same commit as every infrastructure change.
 
@@ -117,22 +118,33 @@ The following foundational components are now implemented and tested:
 - **Input Transformation**: Extracts bucket name and object key from S3 event and passes to state machine
 - **Description**: Documents the rule's purpose for future maintainers
 
-### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issues #4, #5, #6, and #7
+### Step Functions State Machine (SleepAudioPipelineStateMachine) - Issues #4, #5, #6, #7, and #10
 - **Orchestration**: Manages the audio processing workflow with built-in retries and error handling
 - **Definition**: Enhanced workflow with error handling and Lambda integration:
   - Success path: Start → Put Metadata → Audio Processor Lambda → Polly Task → Update Completed Status → Publish Success → End
   - Error path: (on any error) → Update Failed Status → Publish Failure → End
-- **Error Handling (Issue #6)**: 
-  - Catch blocks on Put Metadata, Audio Processor Lambda, and Polly tasks capture all errors
+- **Error Handling (Issues #6, #10)**: 
+  - Catch blocks on Put Metadata, Audio Processor Lambda, and Polly tasks capture errors
+  - **Specific Error Types (Issue #10)**:
+    - Lambda task: `Lambda.ServiceException`, `Lambda.TooManyRequestsException`, `States.TaskFailed`
+    - Polly task: `Polly.ServiceException`, `States.TaskFailed`
+    - DynamoDB tasks: `DynamoDB.ProvisionedThroughputExceededException`, `States.TaskFailed`
   - Error details captured in `$.error` path
   - Failed executions update DynamoDB status to `FAILED` with error details
   - All errors trigger SNS failure notifications
+- **Retry Policies (Issue #10)**:
+  - **Lambda Invoke Task**: 3 retries, 2s interval, backoff rate 2.0
+  - **Polly Task**: 3 retries, 2s interval, backoff rate 2.0
+  - **DynamoDB Tasks (Put/Update)**: 3 retries, 2s interval, backoff rate 2.0
+  - Exponential backoff: 2s → 4s → 8s for transient failures
+  - Prevents cascading failures from temporary service issues
 - **Status Updates (Issue #6)**:
   - Initial status: `PROCESSING` (from Put Metadata task)
   - Success status: `COMPLETED` (via DynamoDB UpdateItem)
   - Failure status: `FAILED` (via DynamoDB UpdateItem with error details)
   - Status updates include `updatedAt` timestamp
 - **CloudWatch Logs**: Full execution logging enabled (level: ALL, includes execution data)
+- **X-Ray Tracing (Issue #10)**: Enabled for end-to-end distributed tracing
 - **IAM Role**: Execution role with least-privilege permissions for:
   - DynamoDB: PutItem and UpdateItem operations
   - Lambda: InvokeFunction (for SleepAudioProcessor)
@@ -140,6 +152,7 @@ The following foundational components are now implemented and tested:
   - S3: Write access to output bucket
   - SNS: Publish to notification topics
   - KMS: Decrypt/encrypt using SNS encryption key
+  - X-Ray: PutTraceSegments and PutTelemetryRecords
 - **DynamoDB Integration (Issue #5)**: Initial task state that writes metadata record to DynamoDB
   - Stores audioId (partition key), status, inputBucket, inputKey, createdAt, updatedAt
   - Status set to `PROCESSING` when workflow starts
@@ -157,31 +170,37 @@ The following foundational components are now implemented and tested:
 - **Event-Driven**: Triggered automatically by EventBridge rule on S3 uploads
 - **Input**: Receives bucket name and object key from EventBridge event
 
-### Lambda Function - SleepAudioProcessor (Issues #7 and #8)
+### Lambda Function - SleepAudioProcessor (Issues #7, #8, and #10)
 - **Runtime**: Node.js 20.x (TypeScript)
 - **Handler**: `index.handler`
 - **Code Location**: `lambda/sleep-audio-processor/`
-- **Purpose**: Audio processing Lambda with input validation
+- **Purpose**: Audio processing Lambda with input validation and structured logging
   - **Input Validation (Issue #8)**:
     - Validates required fields: bucket and key must be present and non-empty
     - Validates file extension: only supports .mp3, .wav, .m4a, .ogg, .flac
     - Returns clear error messages for validation failures
     - Validation errors trigger the state machine error path
-  - Logs input for observability
+  - **Structured Logging (Issue #10)**:
+    - All logs output in JSON format for CloudWatch Logs Insights
+    - Each log includes: level (INFO/ERROR), requestId, message, timestamp
+    - Enables structured queries: "Show all ERROR logs for audioId X"
+    - Facilitates automated log analysis and alerting
   - Updates DynamoDB with processing metadata (processor, processedAt, fileExtension)
   - Returns enriched metadata with processing status
   - Future enhancements: Audio metadata extraction, file size validation, duration analysis
 - **Environment Variables**:
   - `TABLE_NAME`: DynamoDB table name for metadata storage
 - **Timeout**: 60 seconds
+- **X-Ray Tracing (Issue #10)**: Active mode for distributed tracing across service calls
 - **IAM Permissions**: Execution role with least-privilege access:
   - DynamoDB: Read and write access to metadata table (GetItem, UpdateItem, PutItem, DeleteItem, Scan, Query)
   - CloudWatch Logs: Basic execution role (CreateLogGroup, CreateLogStream, PutLogEvents)
+  - X-Ray: PutTraceSegments and PutTelemetryRecords
 - **Integration**: Invoked by Step Functions state machine as a task between Put Metadata and Polly tasks
 - **Error Handling**: All errors (including validation failures) are caught by state machine and trigger the error path
-- **Observability**: All invocations logged to CloudWatch Logs with input/output details
+- **Observability**: All invocations logged to CloudWatch Logs with structured JSON output
 
-### SNS Notification Topics (Issue #6)
+### SNS Notification Topics (Issues #6 and #10)
 - **Completed Topic** (SleepAudioPipelineCompletedTopic):
   - Display Name: "Sleep Audio Pipeline Completed"
   - Encrypted using dedicated KMS key with key rotation enabled
@@ -192,11 +211,40 @@ The following foundational components are now implemented and tested:
   - Encrypted using same KMS key as Completed topic
   - Publishes failure notifications with: status, audioId, inputBucket, inputKey, error, failedAt
   - Triggered when any error occurs in the workflow (Put Metadata or Polly task failures)
+- **Alarm Topic** (SleepAudioPipelineAlarmTopic) - Issue #10:
+  - Display Name: "Sleep Audio Pipeline Alarms"
+  - Encrypted using same KMS key
+  - Receives CloudWatch Alarm notifications for critical failures
+  - Enables centralized alerting for operational issues
 - **KMS Encryption**:
   - Dedicated KMS key (SnsEncryptionKey) with automatic key rotation
   - Least-privilege key policy: State machine has decrypt/encrypt permissions
   - Retain policy to prevent accidental deletion
-- **IAM**: State machine has scoped SNS:Publish permission on both topics
+- **IAM**: State machine has scoped SNS:Publish permission on all topics
+
+### CloudWatch Alarms (Issue #10)
+- **State Machine Execution Failures Alarm**:
+  - Metric: `ExecutionsFailed` (AWS/States namespace)
+  - Threshold: > 0 failures
+  - Evaluation: 2 periods of 5 minutes (Sum statistic)
+  - Action: Publishes to Alarm SNS topic
+  - Purpose: Alerts when state machine executions fail
+- **Lambda Function Errors Alarm**:
+  - Metric: `Errors` (AWS/Lambda namespace)
+  - Threshold: > 0 errors
+  - Evaluation: 2 periods of 5 minutes (Sum statistic)
+  - Action: Publishes to Alarm SNS topic
+  - Purpose: Alerts when Lambda function errors occur
+- **Lambda Function Throttles Alarm**:
+  - Metric: `Throttles` (AWS/Lambda namespace)
+  - Threshold: > 0 throttles
+  - Evaluation: 2 periods of 5 minutes (Sum statistic)
+  - Action: Publishes to Alarm SNS topic
+  - Purpose: Alerts when Lambda function is throttled (capacity issues)
+- **Alarm Configuration**:
+  - TreatMissingData: NOT_BREACHING (no false alarms during quiet periods)
+  - All alarms send notifications to dedicated Alarm SNS topic
+  - Enables proactive monitoring and rapid incident response
 
 ### DynamoDB Metadata Table (SleepAudioMetadataTable) - Issue #5
 - **Partition Key**: `audioId` (string) — unique identifier for each audio processing job
@@ -232,7 +280,8 @@ The state machine now includes comprehensive error handling and notification cap
 **Notifications:**
 - **Success Path**: After successful processing, updates status to `COMPLETED` and publishes to Completed SNS topic
 - **Failure Path**: On any error, updates status to `FAILED` (with error details) and publishes to Failed SNS topic
-- Both topics are encrypted using a dedicated KMS key with automatic key rotation
+- **Alarms (Issue #10)**: CloudWatch Alarms publish to dedicated Alarm SNS topic for operational monitoring
+- All topics are encrypted using a dedicated KMS key with automatic key rotation
 - Notification messages include: status, audioId, bucket/key, timestamp, and error details (for failures)
 
 **Security:**
@@ -245,9 +294,9 @@ All components follow AWS best practices:
 - Least-privilege IAM (scoped permissions for each service)
 - Encryption at rest and in transit
 - Private by default (no public access)
-- Infrastructure as code with comprehensive test coverage (65 passing tests)
-- Observable via CloudWatch Logs and Step Functions execution history
-- Resilient error handling with automatic status updates and notifications
+- Infrastructure as code with comprehensive test coverage (101 passing tests)
+- Observable via CloudWatch Logs, X-Ray, and Step Functions execution history
+- Resilient error handling with automatic retries, status updates, and notifications
 
 ### Complete Pipeline Integration and Input Validation (Issue #8)
 
@@ -342,6 +391,71 @@ This milestone prepares the pipeline for production deployment with proper envir
 
 ---
 
+### Advanced Error Handling, Retries & Observability (Issue #10)
+
+Issue #10 enhances the pipeline robustness and observability with production-grade error handling, automatic retries, distributed tracing, and proactive monitoring. Following strict TDD principles: 19 tests written first (failing), then features implemented to make them pass.
+
+**Retry Policies with Exponential Backoff:**
+- **Lambda Invoke Task**: 3 retries with exponential backoff (2s → 4s → 8s)
+  - Handles transient Lambda service errors (`Lambda.ServiceException`, `Lambda.TooManyRequestsException`)
+  - Retries task failures (`States.TaskFailed`)
+- **Polly Task**: 3 retries with same exponential backoff
+  - Handles Polly service errors (`Polly.ServiceException`)
+  - Retries task failures
+- **DynamoDB Tasks (Put/Update)**: 3 retries with exponential backoff
+  - Handles DynamoDB throttling (`DynamoDB.ProvisionedThroughputExceededException`)
+  - Retries task failures
+- **Benefits**: Prevents cascading failures, improves reliability during transient service issues
+
+**Advanced Error Handling:**
+- **Specific Error Types**: Catch blocks now specify service-specific errors instead of catch-all
+  - Lambda: `Lambda.ServiceException`, `Lambda.TooManyRequestsException`, `States.TaskFailed`
+  - Polly: `Polly.ServiceException`, `States.TaskFailed`
+  - DynamoDB: `DynamoDB.ProvisionedThroughputExceededException`, `States.TaskFailed`
+- **Error Context**: All errors captured in `$.error` path with full details for debugging
+- **Graceful Degradation**: Failed tasks transition to error path with status updates and notifications
+
+**X-Ray Tracing:**
+- **Lambda Function**: X-Ray tracing in ACTIVE mode for distributed tracing
+  - Traces DynamoDB calls, downstream service invocations
+  - Enables latency analysis and bottleneck identification
+- **State Machine**: X-Ray tracing enabled for end-to-end workflow visibility
+  - Traces task execution, service integrations, retries
+  - Visualizes full execution path in X-Ray Service Map
+- **IAM**: Automatic X-Ray permissions granted (PutTraceSegments, PutTelemetryRecords)
+
+**Structured Logging:**
+- **Lambda Handler**: All logs output in JSON format for CloudWatch Logs Insights
+  - Fields: level (INFO/ERROR), requestId, message, timestamp, event details
+  - Example: `{"level":"INFO","requestId":"abc123","message":"Processing audio file","data":{"bucket":"...","key":"..."},"timestamp":"2024-..."}`
+  - Enables structured queries: `fields @timestamp, level, message | filter requestId = "abc123"`
+- **Benefits**: Easier log parsing, automated analysis, correlation across requests
+
+**CloudWatch Alarms:**
+- **State Machine Execution Failures**: Alerts when state machine executions fail (threshold: > 0)
+- **Lambda Errors**: Alerts when Lambda function errors occur (threshold: > 0)
+- **Lambda Throttles**: Alerts when Lambda is throttled, indicating capacity issues (threshold: > 0)
+- **Configuration**: 2 evaluation periods of 5 minutes, TreatMissingData: NOT_BREACHING
+- **Actions**: All alarms publish to dedicated Alarm SNS topic for centralized alerting
+
+**SNS Alarm Topic:**
+- New dedicated topic (SleepAudioPipelineAlarmTopic) for CloudWatch Alarm notifications
+- Encrypted using same KMS key as other SNS topics
+- Enables operational monitoring separate from pipeline success/failure notifications
+
+**Test Coverage:**
+- 19 new tests for Issue #10 (retry policies, error handling, X-Ray, alarms, logging)
+- Total: 101 passing tests (up from 81 in Issue #9)
+- All tests follow strict TDD: written first (failing), then implemented
+
+**Benefits:**
+- **Reliability**: Automatic retries prevent failures from transient issues
+- **Visibility**: X-Ray and structured logs enable rapid troubleshooting
+- **Proactive Monitoring**: CloudWatch Alarms alert before users are impacted
+- **Production-Ready**: Robust error handling meets production observability standards
+
+---
+
 ## 5. Key AWS Services & Rationale
 
 | Concern | Service | Why it was chosen |
@@ -362,26 +476,26 @@ This milestone prepares the pipeline for production deployment with proper envir
 
 ## 6. Mermaid Diagram
 
-> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3–#9). Issue #8 completed pipeline wiring and input validation. Issue #9 added multi-environment support, refinements, and deployment preparation. Components without ✅ are planned for future issues.
+> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3–#10). Issue #8 completed pipeline wiring and input validation. Issue #9 added multi-environment support, refinements, and deployment preparation. Issue #10 added advanced error handling, retries, X-Ray tracing, and CloudWatch Alarms. Components without ✅ are planned for future issues.
 
 ```mermaid
 flowchart TD
     U([User / Client]) -->|1. Upload raw audio| S3in[(✅ S3 Input Bucket<br/>private, encrypted, versioned<br/>✅ Issue #9: Env-aware removal policies)]
 
     S3in -->|2. Object Created event| EB{{✅ EventBridge Rule}}
-    EB -->|3. StartExecution<br/>with bucket + key| SFN[✅ Step Functions<br/>SleepAudioPipelineStateMachine<br/>✅ Issue #9: Env-aware log retention]
+    EB -->|3. StartExecution<br/>with bucket + key| SFN[✅ Step Functions<br/>SleepAudioPipelineStateMachine<br/>✅ Issue #9: Env-aware log retention<br/>✅ Issue #10: X-Ray tracing + retries]
 
-    subgraph SFN_Detail [✅ Step Functions State Machine - Complete Pipeline with Input Validation Issue #8]
+    subgraph SFN_Detail [✅ Step Functions State Machine - Complete Pipeline Issue #8 + Retries/Observability Issue #10]
         direction TB
-        PUTMETA[✅ Put Metadata Task<br/>DynamoDB PutItem<br/>status: PROCESSING]
-        PUTMETA --> LAMBDA[✅ Audio Processor Lambda<br/>SleepAudioProcessor<br/>✅ Input Validation Issue #8<br/>Validates: bucket, key, file extension]
-        LAMBDA --> POLLY[✅ Polly Task<br/>startSpeechSynthesisTask<br/>Placeholder narration]
-        POLLY --> UPDATECOMPLETE[✅ Update Completed Status<br/>DynamoDB UpdateItem<br/>status: COMPLETED]
+        PUTMETA[✅ Put Metadata Task<br/>DynamoDB PutItem<br/>status: PROCESSING<br/>✅ Issue #10: 3 retries, exp backoff]
+        PUTMETA --> LAMBDA[✅ Audio Processor Lambda<br/>SleepAudioProcessor<br/>✅ Input Validation Issue #8<br/>✅ Issue #10: X-Ray tracing<br/>✅ Issue #10: 3 retries, exp backoff<br/>✅ Issue #10: Structured JSON logging]
+        LAMBDA --> POLLY[✅ Polly Task<br/>startSpeechSynthesisTask<br/>Placeholder narration<br/>✅ Issue #10: 3 retries, exp backoff]
+        POLLY --> UPDATECOMPLETE[✅ Update Completed Status<br/>DynamoDB UpdateItem<br/>status: COMPLETED<br/>✅ Issue #10: 3 retries, exp backoff]
         UPDATECOMPLETE --> PUBLISHSUCCESS[✅ Publish Success<br/>SNS Publish to Completed Topic]
         
-        PUTMETA -.->|on error| UPDATEFAILED[✅ Update Failed Status<br/>DynamoDB UpdateItem<br/>status: FAILED with error details]
-        LAMBDA -.->|on error or<br/>validation failure| UPDATEFAILED
-        POLLY -.->|on error| UPDATEFAILED
+        PUTMETA -.->|on error<br/>✅ Issue #10: Specific error types| UPDATEFAILED[✅ Update Failed Status<br/>DynamoDB UpdateItem<br/>status: FAILED with error details<br/>✅ Issue #10: 3 retries, exp backoff]
+        LAMBDA -.->|on error or<br/>validation failure<br/>✅ Issue #10: Specific error types| UPDATEFAILED
+        POLLY -.->|on error<br/>✅ Issue #10: Specific error types| UPDATEFAILED
         UPDATEFAILED -.-> PUBLISHFAILURE[✅ Publish Failure<br/>SNS Publish to Failed Topic]
     end
 
@@ -390,14 +504,18 @@ flowchart TD
     UPDATECOMPLETE -.->|Update status| DDB
     UPDATEFAILED -.->|Update status + error| DDB
     POLLY -.->|Writes MP3| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted<br/>✅ Issue #9: Env-aware removal policies)]
-    SFN -.->|Execution logs| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs<br/>✅ Issue #9: Env-aware retention]
-    LAMBDA -.->|Execution logs<br/>+ validation errors| CWLOGS2[✅ CloudWatch Logs<br/>Lambda Logs]
+    SFN -.->|Execution logs<br/>✅ Issue #10: X-Ray traces| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs<br/>✅ Issue #9: Env-aware retention]
+    LAMBDA -.->|Execution logs<br/>+ validation errors<br/>✅ Issue #10: Structured JSON<br/>✅ Issue #10: X-Ray traces| CWLOGS2[✅ CloudWatch Logs<br/>Lambda Logs]
     
     PUBLISHSUCCESS -.->|5a. Success notification| SNSCOMPLETE{{✅ SNS Completed Topic<br/>KMS encrypted}}
     PUBLISHFAILURE -.->|5b. Failure notification| SNSFAILED{{✅ SNS Failed Topic<br/>KMS encrypted}}
     
+    SFN -.->|✅ Issue #10: Alarms on failures| CWALARMS[✅ CloudWatch Alarms<br/>State Machine Failures<br/>Lambda Errors<br/>Lambda Throttles]
+    CWALARMS -.->|Alarm notifications| SNSALARM{{✅ SNS Alarm Topic<br/>✅ Issue #10<br/>KMS encrypted}}
+    
     SNSCOMPLETE -.->|Notify| Email1([Email Subscriber])
     SNSFAILED -.->|Notify| Email2([Email Subscriber])
+    SNSALARM -.->|Alert| Ops([Operations Team])
 
     subgraph Deployment [✅ Issue #9: Multi-Environment & Deployment]
         direction LR
@@ -436,8 +554,11 @@ flowchart TD
     style PUBLISHFAILURE fill:#d9534f,color:#fff,stroke:#000,stroke-width:3px
     style SNSCOMPLETE fill:#5cb85c,color:#fff,stroke:#000,stroke-width:3px
     style SNSFAILED fill:#d9534f,color:#fff,stroke:#000,stroke-width:3px
+    style SNSALARM fill:#ff9800,color:#fff,stroke:#000,stroke-width:3px
     style DDB fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
     style CWLOGS fill:#759c3e,color:#fff,stroke:#000,stroke-width:3px
+    style CWLOGS2 fill:#759c3e,color:#fff,stroke:#000,stroke-width:3px
+    style CWALARMS fill:#ff9800,color:#fff,stroke:#000,stroke-width:3px
     style SFN_Detail fill:#f0f0f0,stroke:#cd2264,stroke-width:2px
     style Deployment fill:#e8f4f8,stroke:#1e88e5,stroke-width:2px
     style Future fill:#f9f9f9,stroke:#999,stroke-width:1px,stroke-dasharray: 5 5
@@ -450,18 +571,22 @@ flowchart TD
     style SQSdown fill:#aaa,color:#000,stroke-dasharray: 5 5
     style Email1 fill:#ddd,color:#000
     style Email2 fill:#ddd,color:#000
+    style Ops fill:#ddd,color:#000
 ```
 
 **Legend:**
-- ✅ = Implemented and tested (Issues #3, #4, #5, and #6)
+- ✅ = Implemented and tested (Issues #3–#10)
 - Solid boxes with thick border = Fully implemented and wired components
 - Solid arrows = Active data flow paths
-- Dashed arrows = Error paths and auxiliary flows (implemented in Issue #6)
+- Dashed arrows = Error paths, auxiliary flows, and observability traces
 - Dashed boxes = Planned for future implementation
 - Current state machine: 
-  - Success path: Start → Put Metadata → Polly Task → Update Completed Status → Publish Success → End
-  - Error path: (on error) → Update Failed Status → Publish Failure → End
-- Full workflow logic will be added in subsequent issues
+  - Success path: Start → Put Metadata → Lambda Validation → Polly Task → Update Completed Status → Publish Success → End
+  - Error path: (on error after retries) → Update Failed Status → Publish Failure → End
+  - Issue #10: Retry policies on all tasks (3 attempts, exponential backoff)
+  - Issue #10: Specific error type handling (Lambda, Polly, DynamoDB errors)
+  - Issue #10: X-Ray tracing enabled on Lambda and State Machine
+  - Issue #10: CloudWatch Alarms monitoring failures, errors, throttles
 
 ---
 
@@ -483,13 +608,17 @@ flowchart TD
 
 ## 8. Observability
 
-- **Structured logging** — Lambda and Step Functions emit JSON logs to **CloudWatch Logs**
-  with bounded retention per environment.
-- **Step Functions execution history** — Full visual audit trail of every workflow run.
-- **Metrics & alarms** — CloudWatch alarms on Lambda errors/throttles, Step Functions
-  `ExecutionsFailed`, DLQ `ApproximateNumberOfMessagesVisible > 0`, and DynamoDB throttling.
-- **Tracing** — AWS X-Ray tracing enabled across Lambda and Step Functions for end-to-end
-  latency analysis (future enhancement).
+- **Structured logging (Issue #10)** — Lambda handler emits JSON logs with level, requestId, message, timestamp, and context data to **CloudWatch Logs**. Enables CloudWatch Logs Insights queries for troubleshooting. Log retention varies by environment: dev=3 days, stage=7 days, prod=30 days.
+- **X-Ray Tracing (Issue #10)** — AWS X-Ray tracing enabled on both Lambda (ACTIVE mode) and Step Functions state machine for end-to-end distributed tracing. Enables latency analysis, service map visualization, and bottleneck identification across all integrations (DynamoDB, Polly, SNS).
+- **Step Functions execution history** — Full visual audit trail of every workflow run with execution ARNs for correlation.
+- **CloudWatch Alarms (Issue #10)** — Three alarms monitoring critical failure paths:
+  - State Machine Execution Failures (threshold > 0)
+  - Lambda Function Errors (threshold > 0)
+  - Lambda Function Throttles (threshold > 0, indicating capacity issues)
+  - All alarms publish to dedicated Alarm SNS topic for operational alerting
+  - Evaluation: 2 periods of 5 minutes, TreatMissingData: NOT_BREACHING
+- **Metrics** — CloudWatch metrics tracked for Lambda invocations, Step Functions executions, DynamoDB throttling, SNS publish success rates.
+- **Future enhancements** — CloudWatch Dashboard for centralized monitoring (optional for Issue #10, planned for later).
 
 ---
 
