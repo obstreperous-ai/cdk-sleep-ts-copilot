@@ -41,7 +41,8 @@ Design goals:
 | CDK app skeleton | ✅ Done | `bin/cdk-base.ts`, `lib/cdk-base-stack.ts` |
 | Jest + assertions setup | ✅ Done | `test/cdk-base.test.ts` |
 | CI workflow | ✅ Done | `.github/workflows/ci.yml` |
-| Multi-environment context (dev/stage/prod) | ⬜ Not started | — |
+| Multi-environment context (dev/stage/prod) | ✅ Done (Issue #9) | `lib/cdk-base-stack.ts` (getEnvironmentConfig) |
+| CDK Pipeline skeleton | ✅ Done (Issue #9) | `lib/pipeline-stack.ts` |
 | S3 Input Bucket | ✅ Done (Issue #3) | `lib/cdk-base-stack.ts` (SleepAudioInputBucket) |
 | EventBridge Rule (S3 → Step Functions) | ✅ Done (Issue #3) | `lib/cdk-base-stack.ts` (S3ObjectCreatedRule) |
 | Step Functions Orchestrator | ✅ Done (Issues #4, #6, #7, #8) | `lib/cdk-base-stack.ts` (SleepAudioPipelineStateMachine) |
@@ -53,6 +54,7 @@ Design goals:
 | S3 Output Bucket (versioned) | ✅ Done (Issue #3) | `lib/cdk-base-stack.ts` (SleepAudioOutputBucket) |
 | SNS Notification Topics | ✅ Done (Issue #6) | `lib/cdk-base-stack.ts` (SleepAudioPipelineCompletedTopic, SleepAudioPipelineFailedTopic) |
 | Complete Pipeline Wiring & Input Validation | ✅ Done (Issue #8) | All components integrated end-to-end |
+| Pipeline Testing & Refinements | ✅ Done (Issue #9) | Environment-aware configuration, deprecation fixes |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
 | CloudWatch Alarms | ⬜ Not started | — |
 
@@ -296,6 +298,48 @@ Issue #8 completed the pipeline wiring and added input validation to ensure a cl
 - Tests validate error handling paths and DynamoDB status updates
 - Snapshot test captures the complete synthesized CloudFormation template
 
+### Pipeline Testing, Refinement & Deployment Preparation (Issue #9)
+
+Issue #9 enhanced the pipeline with comprehensive testing, important refinements, and deployment preparation. Following strict TDD principles, all tests were written first, then implementation was added to make them pass.
+
+**Multi-Environment Support:**
+- Environment context detection via CDK context (`-c env=dev|stage|prod`)
+- Environment-specific configurations:
+  - **Dev**: DESTROY removal policy, 3-day log retention (rapid iteration)
+  - **Stage**: RETAIN removal policy, 7-day log retention (pre-production)
+  - **Prod**: RETAIN removal policy, 30-day log retention (production safety)
+- Single codebase deploys safely to all environments without modification
+- Verified with comprehensive tests and snapshot comparisons
+
+**Refinements:**
+- Fixed deprecated `pointInTimeRecovery` → migrated to `pointInTimeRecoverySpecification`
+- Eliminated deprecation warnings from CDK synthesis
+- Maintained backward compatibility while adopting current best practices
+- All existing functionality preserved with improved API usage
+
+**Deployment Preparation:**
+- Created `PipelineStack` skeleton for future CDK Pipelines automation
+- Implemented `PipelineStage` construct for environment-aware deployments
+- Foundation for progressive deployment (dev → stage → prod with approval gates)
+- Prepared for source repository integration in future issues
+
+**Test Coverage:**
+- Expanded from 65 to 81 passing tests
+- Added environment-specific test suites (dev/stage/prod)
+- Snapshot tests for each environment configuration
+- Verified removal policies and log retention for all environments
+- Pipeline stack structure tests
+- All tests follow strict TDD: written first, then implementation
+
+**Verification:**
+- `cdk synth` succeeds with no warnings for all environments
+- `cdk synth -c env=dev` produces dev-specific configuration
+- `cdk synth -c env=prod` produces production-safe configuration
+- All 81 tests pass with full coverage of new functionality
+- CI workflow continues to pass with enhanced test suite
+
+This milestone prepares the pipeline for production deployment with proper environment separation, eliminates technical debt (deprecations), and establishes the foundation for automated deployment pipelines.
+
 ---
 
 ## 5. Key AWS Services & Rationale
@@ -318,14 +362,14 @@ Issue #8 completed the pipeline wiring and added input validation to ensure a cl
 
 ## 6. Mermaid Diagram
 
-> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3–#8). Issue #8 completed pipeline wiring and input validation. Components without ✅ are planned for future issues.
+> **Note**: Components marked with ✅ are **implemented and tested** (Issues #3–#9). Issue #8 completed pipeline wiring and input validation. Issue #9 added multi-environment support, refinements, and deployment preparation. Components without ✅ are planned for future issues.
 
 ```mermaid
 flowchart TD
-    U([User / Client]) -->|1. Upload raw audio| S3in[(✅ S3 Input Bucket<br/>private, encrypted, versioned)]
+    U([User / Client]) -->|1. Upload raw audio| S3in[(✅ S3 Input Bucket<br/>private, encrypted, versioned<br/>✅ Issue #9: Env-aware removal policies)]
 
     S3in -->|2. Object Created event| EB{{✅ EventBridge Rule}}
-    EB -->|3. StartExecution<br/>with bucket + key| SFN[✅ Step Functions<br/>SleepAudioPipelineStateMachine]
+    EB -->|3. StartExecution<br/>with bucket + key| SFN[✅ Step Functions<br/>SleepAudioPipelineStateMachine<br/>✅ Issue #9: Env-aware log retention]
 
     subgraph SFN_Detail [✅ Step Functions State Machine - Complete Pipeline with Input Validation Issue #8]
         direction TB
@@ -341,12 +385,12 @@ flowchart TD
         UPDATEFAILED -.-> PUBLISHFAILURE[✅ Publish Failure<br/>SNS Publish to Failed Topic]
     end
 
-    PUTMETA -.->|Write initial metadata| DDB[(✅ DynamoDB Table<br/>SleepAudioMetadataTable<br/>on-demand, encrypted, PITR)]
+    PUTMETA -.->|Write initial metadata| DDB[(✅ DynamoDB Table<br/>SleepAudioMetadataTable<br/>✅ Issue #9: pointInTimeRecoverySpecification<br/>on-demand, encrypted, PITR)]
     LAMBDA -.->|Update processor info<br/>+ fileExtension| DDB
     UPDATECOMPLETE -.->|Update status| DDB
     UPDATEFAILED -.->|Update status + error| DDB
-    POLLY -.->|Writes MP3| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted)]
-    SFN -.->|Execution logs| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs]
+    POLLY -.->|Writes MP3| S3out[(✅ S3 Output Bucket<br/>versioned, encrypted<br/>✅ Issue #9: Env-aware removal policies)]
+    SFN -.->|Execution logs| CWLOGS[✅ CloudWatch Logs<br/>State Machine Logs<br/>✅ Issue #9: Env-aware retention]
     LAMBDA -.->|Execution logs<br/>+ validation errors| CWLOGS2[✅ CloudWatch Logs<br/>Lambda Logs]
     
     PUBLISHSUCCESS -.->|5a. Success notification| SNSCOMPLETE{{✅ SNS Completed Topic<br/>KMS encrypted}}
@@ -354,6 +398,20 @@ flowchart TD
     
     SNSCOMPLETE -.->|Notify| Email1([Email Subscriber])
     SNSFAILED -.->|Notify| Email2([Email Subscriber])
+
+    subgraph Deployment [✅ Issue #9: Multi-Environment & Deployment]
+        direction LR
+        ENV_DEV[Dev Environment<br/>DESTROY policy<br/>3-day logs]
+        ENV_STAGE[Stage Environment<br/>RETAIN policy<br/>7-day logs]
+        ENV_PROD[Prod Environment<br/>RETAIN policy<br/>30-day logs]
+        PIPELINE[✅ Pipeline Stack Skeleton<br/>Foundation for CDK Pipelines]
+        
+        ENV_DEV -.->|Progressive<br/>deployment| ENV_STAGE
+        ENV_STAGE -.->|Manual<br/>approval| ENV_PROD
+        PIPELINE -.->|Orchestrates| ENV_DEV
+        PIPELINE -.->|Orchestrates| ENV_STAGE
+        PIPELINE -.->|Orchestrates| ENV_PROD
+    end
 
     subgraph Future [Future Components - Not Yet Implemented]
         direction TB
@@ -381,9 +439,12 @@ flowchart TD
     style DDB fill:#4053d6,color:#fff,stroke:#000,stroke-width:3px
     style CWLOGS fill:#759c3e,color:#fff,stroke:#000,stroke-width:3px
     style SFN_Detail fill:#f0f0f0,stroke:#cd2264,stroke-width:2px
+    style Deployment fill:#e8f4f8,stroke:#1e88e5,stroke-width:2px
     style Future fill:#f9f9f9,stroke:#999,stroke-width:1px,stroke-dasharray: 5 5
-    style V fill:#f90,color:#000,stroke-dasharray: 5 5
-    style OUT fill:#f90,color:#000,stroke-dasharray: 5 5
+    style PIPELINE fill:#1e88e5,color:#fff,stroke:#000,stroke-width:3px
+    style ENV_DEV fill:#4caf50,color:#fff,stroke:#000,stroke-width:2px
+    style ENV_STAGE fill:#ff9800,color:#fff,stroke:#000,stroke-width:2px
+    style ENV_PROD fill:#f44336,color:#fff,stroke:#000,stroke-width:2px
     style BED fill:#1b660f,color:#fff,stroke-dasharray: 5 5
     style DLQ fill:#aaa,color:#000,stroke-dasharray: 5 5
     style SQSdown fill:#aaa,color:#000,stroke-dasharray: 5 5
@@ -444,12 +505,101 @@ flowchart TD
 
 ---
 
-## 10. Multi-Environment Support
+## 10. Multi-Environment Support (Implemented in Issue #9)
 
-Environments (`dev`, `stage`, `prod`) are selected via **CDK context** (e.g.
-`npx cdk synth -c env=stage`). Each environment derives its own resource names, removal
-policies, log retention, and alarm thresholds from a single context-driven configuration, so
-the same stack code deploys safely to every account/region without modification.
+The Sleep Audio Pipeline supports multiple deployment environments (`dev`, `stage`, `prod`) via **CDK context**, enabling safe deployment across different AWS accounts and regions with environment-specific configurations.
+
+### Environment Selection
+
+Environments are selected via CDK context:
+
+```bash
+# Deploy to dev environment (default)
+npx cdk synth
+npx cdk synth -c env=dev
+
+# Deploy to stage environment
+npx cdk synth -c env=stage
+
+# Deploy to prod environment
+npx cdk synth -c env=prod
+```
+
+### Environment-Specific Configurations
+
+Each environment has tailored settings optimized for its purpose:
+
+| Configuration | Dev | Stage | Prod |
+|---|---|---|---|
+| **Removal Policy** | `DESTROY` | `RETAIN` | `RETAIN` |
+| **Log Retention** | 3 days | 7 days | 30 days |
+| **Purpose** | Rapid iteration | Pre-production testing | Production workloads |
+| **Data Protection** | Minimal (easy cleanup) | Standard | Maximum (data persistence) |
+
+#### Development Environment (`dev`)
+- **Removal Policy**: `DESTROY` - Resources are deleted when stack is removed, enabling easy cleanup and cost savings
+- **Log Retention**: 3 days - Short retention for rapid iteration and cost optimization
+- **Use Case**: Local development, feature testing, quick experiments
+
+#### Staging Environment (`stage`)
+- **Removal Policy**: `RETAIN` - Resources are preserved for data integrity testing
+- **Log Retention**: 7 days - Medium retention for debugging integration issues
+- **Use Case**: Pre-production testing, integration validation, performance testing
+
+#### Production Environment (`prod`)
+- **Removal Policy**: `RETAIN` - Resources are never deleted to protect production data
+- **Log Retention**: 30 days - Extended retention for compliance and debugging
+- **Use Case**: Live production workloads, customer-facing services
+
+### Implementation
+
+The environment configuration is managed by the `getEnvironmentConfig()` helper function in `lib/cdk-base-stack.ts`:
+
+```typescript
+function getEnvironmentConfig(scope: Construct): EnvironmentConfig {
+  const env = scope.node.tryGetContext('env') || 'dev';
+  
+  switch (env) {
+    case 'prod':
+      return {
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        logRetention: logs.RetentionDays.ONE_MONTH,
+      };
+    case 'stage':
+      return {
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
+        logRetention: logs.RetentionDays.ONE_WEEK,
+      };
+    case 'dev':
+    default:
+      return {
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+        logRetention: logs.RetentionDays.THREE_DAYS,
+      };
+  }
+}
+```
+
+### CDK Pipelines Support
+
+A pipeline stack skeleton (`lib/pipeline-stack.ts`) provides the foundation for automated multi-environment deployments:
+
+- **PipelineStack**: Orchestrates deployments across environments
+- **PipelineStage**: Encapsulates the application stack for each environment
+- **Future Enhancements** (Issues #10+):
+  - Source repository integration (GitHub/CodeCommit)
+  - Automated build and test steps
+  - Progressive deployment (dev → stage → prod)
+  - Manual approval gates for production
+  - Automated rollback on failure
+
+### Benefits
+
+1. **Consistency**: Same infrastructure code deploys to all environments
+2. **Safety**: Environment-specific policies prevent accidental data loss in production
+3. **Cost Optimization**: Aggressive cleanup in dev, data retention in production
+4. **Compliance**: Configurable log retention meets regulatory requirements
+5. **Flexibility**: Easy to add new environments or modify configurations
 
 ---
 
