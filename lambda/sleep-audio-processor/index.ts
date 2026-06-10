@@ -61,16 +61,34 @@ function validateInput(event: AudioProcessorEvent): { valid: boolean; error?: st
 }
 
 /**
- * Lambda handler for audio processing
+ * Lambda handler for audio processing with structured logging
  */
-export async function handler(event: AudioProcessorEvent): Promise<AudioProcessorResult> {
-  console.log('Sleep Audio Processor invoked with event:', JSON.stringify(event, null, 2));
+export async function handler(event: AudioProcessorEvent, context: any): Promise<AudioProcessorResult> {
+  // Structured logging: Use AWS Lambda context requestId for correlation
+  const requestId = context.awsRequestId;
+  console.log(JSON.stringify({
+    level: 'INFO',
+    requestId,
+    message: 'Sleep Audio Processor invoked',
+    event: {
+      bucket: event.bucket,
+      key: event.key,
+      audioId: event.audioId,
+    },
+    timestamp: new Date().toISOString(),
+  }));
   
   try {
     // Input validation
     const validation = validateInput(event);
     if (!validation.valid) {
-      console.error('Input validation failed:', validation.error);
+      console.log(JSON.stringify({
+        level: 'ERROR',
+        requestId,
+        message: 'Input validation failed',
+        error: validation.error,
+        timestamp: new Date().toISOString(),
+      }));
       throw new Error(validation.error);
     }
     
@@ -79,12 +97,30 @@ export async function handler(event: AudioProcessorEvent): Promise<AudioProcesso
     const audioId = key; // Using key as audioId (consistent with state machine)
     const fileExtension = key.toLowerCase().substring(key.lastIndexOf('.'));
     
-    // Log the input for observability
-    console.log(`Processing audio: bucket=${bucket}, key=${key}, audioId=${audioId}, extension=${fileExtension}`);
+    // Structured log for processing
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Processing audio file',
+      data: {
+        bucket,
+        key,
+        audioId,
+        fileExtension,
+      },
+      timestamp: new Date().toISOString(),
+    }));
     
     // Optionally update DynamoDB with processing status
     if (TABLE_NAME) {
-      console.log(`Updating DynamoDB table: ${TABLE_NAME}`);
+      console.log(JSON.stringify({
+        level: 'INFO',
+        requestId,
+        message: 'Updating DynamoDB table',
+        tableName: TABLE_NAME,
+        timestamp: new Date().toISOString(),
+      }));
+      
       try {
         const updateCommand = new UpdateItemCommand({
           TableName: TABLE_NAME,
@@ -104,9 +140,21 @@ export async function handler(event: AudioProcessorEvent): Promise<AudioProcesso
           },
         });
         await dynamoDbClient.send(updateCommand);
-        console.log('DynamoDB update successful');
+        
+        console.log(JSON.stringify({
+          level: 'INFO',
+          requestId,
+          message: 'DynamoDB update successful',
+          timestamp: new Date().toISOString(),
+        }));
       } catch (dbError) {
-        console.error('DynamoDB update failed:', dbError);
+        console.log(JSON.stringify({
+          level: 'ERROR',
+          requestId,
+          message: 'DynamoDB update failed',
+          error: dbError instanceof Error ? dbError.message : 'Unknown error',
+          timestamp: new Date().toISOString(),
+        }));
         // Continue processing even if DynamoDB update fails
       }
     }
@@ -123,11 +171,28 @@ export async function handler(event: AudioProcessorEvent): Promise<AudioProcesso
       },
     };
     
-    console.log('Processing complete:', JSON.stringify(result, null, 2));
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Processing complete',
+      result: {
+        status: result.status,
+        audioId: result.audioId,
+      },
+      timestamp: new Date().toISOString(),
+    }));
+    
     return result;
     
   } catch (error) {
-    console.error('Error processing audio:', error);
+    console.log(JSON.stringify({
+      level: 'ERROR',
+      requestId,
+      message: 'Error processing audio',
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+      timestamp: new Date().toISOString(),
+    }));
     throw new Error(`Audio processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
   }
 }
