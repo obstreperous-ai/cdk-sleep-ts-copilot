@@ -4,6 +4,8 @@
   "description": "Lambda function for sleep audio processing",
   "main": "index.ts",
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0"
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "@aws-sdk/client-polly": "^3.0.0"
   }
 }

@@ -573,7 +573,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioMetadataTableD77D3179",
               },
-              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#outputLocation":"outputLocation","#outputFileSize":"outputFileSize"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":outputLocation":{"S.$":"$.audioProcessorResult.Payload.outputLocation"},":outputFileSize":{"N.$":"States.Format('{}', $.audioProcessorResult.Payload.outputFileSize)"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #outputLocation = :outputLocation, #outputFileSize = :outputFileSize"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -581,7 +581,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioPipelineCompletedTopic28BF352F",
               },
-              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
+              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","outputLocation.$":"$.audioProcessorResult.Payload.outputLocation","outputFileSize.$":"$.audioProcessorResult.Payload.outputFileSize","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -865,11 +865,17 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
+          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
         },
-        "Description": "Processes and enriches audio metadata",
+        "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
           "Variables": {
+            "INPUT_BUCKET": {
+              "Ref": "SleepAudioInputBucket1923DAE4",
+            },
+            "OUTPUT_BUCKET": {
+              "Ref": "SleepAudioOutputBucketBD13D91D",
+            },
             "TABLE_NAME": {
               "Ref": "SleepAudioMetadataTableD77D3179",
             },
@@ -883,7 +889,7 @@ def sort_filter_rules(json_obj):
           ],
         },
         "Runtime": "nodejs20.x",
-        "Timeout": 60,
+        "Timeout": 120,
         "TracingConfig": {
           "Mode": "Active",
         },
@@ -970,6 +976,75 @@ def sort_filter_rules(json_obj):
                   ],
                 },
               ],
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioInputBucket1923DAE4",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioInputBucket1923DAE4",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioOutputBucketBD13D91D",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioOutputBucketBD13D91D",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": "polly:SynthesizeSpeech",
+              "Effect": "Allow",
+              "Resource": "*",
             },
           ],
           "Version": "2012-10-17",
@@ -1656,7 +1731,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioMetadataTableD77D3179",
               },
-              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#outputLocation":"outputLocation","#outputFileSize":"outputFileSize"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":outputLocation":{"S.$":"$.audioProcessorResult.Payload.outputLocation"},":outputFileSize":{"N.$":"States.Format('{}', $.audioProcessorResult.Payload.outputFileSize)"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #outputLocation = :outputLocation, #outputFileSize = :outputFileSize"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -1664,7 +1739,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioPipelineCompletedTopic28BF352F",
               },
-              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
+              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","outputLocation.$":"$.audioProcessorResult.Payload.outputLocation","outputFileSize.$":"$.audioProcessorResult.Payload.outputFileSize","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -1948,11 +2023,17 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
+          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
         },
-        "Description": "Processes and enriches audio metadata",
+        "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
           "Variables": {
+            "INPUT_BUCKET": {
+              "Ref": "SleepAudioInputBucket1923DAE4",
+            },
+            "OUTPUT_BUCKET": {
+              "Ref": "SleepAudioOutputBucketBD13D91D",
+            },
             "TABLE_NAME": {
               "Ref": "SleepAudioMetadataTableD77D3179",
             },
@@ -1966,7 +2047,7 @@ def sort_filter_rules(json_obj):
           ],
         },
         "Runtime": "nodejs20.x",
-        "Timeout": 60,
+        "Timeout": 120,
         "TracingConfig": {
           "Mode": "Active",
         },
@@ -2053,6 +2134,75 @@ def sort_filter_rules(json_obj):
                   ],
                 },
               ],
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioInputBucket1923DAE4",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioInputBucket1923DAE4",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioOutputBucketBD13D91D",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioOutputBucketBD13D91D",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": "polly:SynthesizeSpeech",
+              "Effect": "Allow",
+              "Resource": "*",
             },
           ],
           "Version": "2012-10-17",
@@ -2739,7 +2889,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioMetadataTableD77D3179",
               },
-              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#outputLocation":"outputLocation","#outputFileSize":"outputFileSize"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":outputLocation":{"S.$":"$.audioProcessorResult.Payload.outputLocation"},":outputFileSize":{"N.$":"States.Format('{}', $.audioProcessorResult.Payload.outputFileSize)"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #outputLocation = :outputLocation, #outputFileSize = :outputFileSize"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -2747,7 +2897,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioPipelineCompletedTopic28BF352F",
               },
-              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
+              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","outputLocation.$":"$.audioProcessorResult.Payload.outputLocation","outputFileSize.$":"$.audioProcessorResult.Payload.outputFileSize","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -3031,11 +3181,17 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
+          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
         },
-        "Description": "Processes and enriches audio metadata",
+        "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
           "Variables": {
+            "INPUT_BUCKET": {
+              "Ref": "SleepAudioInputBucket1923DAE4",
+            },
+            "OUTPUT_BUCKET": {
+              "Ref": "SleepAudioOutputBucketBD13D91D",
+            },
             "TABLE_NAME": {
               "Ref": "SleepAudioMetadataTableD77D3179",
             },
@@ -3049,7 +3205,7 @@ def sort_filter_rules(json_obj):
           ],
         },
         "Runtime": "nodejs20.x",
-        "Timeout": 60,
+        "Timeout": 120,
         "TracingConfig": {
           "Mode": "Active",
         },
@@ -3136,6 +3292,75 @@ def sort_filter_rules(json_obj):
                   ],
                 },
               ],
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioInputBucket1923DAE4",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioInputBucket1923DAE4",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioOutputBucketBD13D91D",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioOutputBucketBD13D91D",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": "polly:SynthesizeSpeech",
+              "Effect": "Allow",
+              "Resource": "*",
             },
           ],
           "Version": "2012-10-17",
@@ -3822,7 +4047,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioMetadataTableD77D3179",
               },
-              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
+              "","ExpressionAttributeNames":{"#status":"status","#updatedAt":"updatedAt","#outputLocation":"outputLocation","#outputFileSize":"outputFileSize"},"ExpressionAttributeValues":{":status":{"S":"COMPLETED"},":updatedAt":{"S.$":"$$.State.EnteredTime"},":outputLocation":{"S.$":"$.audioProcessorResult.Payload.outputLocation"},":outputFileSize":{"N.$":"States.Format('{}', $.audioProcessorResult.Payload.outputFileSize)"}},"UpdateExpression":"SET #status = :status, #updatedAt = :updatedAt, #outputLocation = :outputLocation, #outputFileSize = :outputFileSize"}},"PublishSuccessTask":{"End":true,"Type":"Task","ResultPath":"$.snsResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -3830,7 +4055,7 @@ def sort_filter_rules(json_obj):
               {
                 "Ref": "SleepAudioPipelineCompletedTopic28BF352F",
               },
-              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
+              "","Message":{"status":"COMPLETED","audioId.$":"$.key","inputBucket.$":"$.bucket","inputKey.$":"$.key","outputLocation.$":"$.audioProcessorResult.Payload.outputLocation","outputFileSize.$":"$.audioProcessorResult.Payload.outputFileSize","completedAt.$":"$$.State.EnteredTime"}}},"UpdateFailedStatusTask":{"Next":"PublishFailureTask","Retry":[{"ErrorEquals":["DynamoDB.ProvisionedThroughputExceededException","States.TaskFailed"],"IntervalSeconds":2,"MaxAttempts":3,"BackoffRate":2}],"Type":"Task","ResultPath":"$.updateResult","Resource":"arn:",
               {
                 "Ref": "AWS::Partition",
               },
@@ -4132,11 +4357,17 @@ def sort_filter_rules(json_obj):
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "016cc3ef3996d8677a1a8818c037b963a47bda4074dedf6d9e2af85916fe3ff5.zip",
+          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
         },
-        "Description": "Processes and enriches audio metadata",
+        "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
           "Variables": {
+            "INPUT_BUCKET": {
+              "Ref": "SleepAudioInputBucket1923DAE4",
+            },
+            "OUTPUT_BUCKET": {
+              "Ref": "SleepAudioOutputBucketBD13D91D",
+            },
             "TABLE_NAME": {
               "Ref": "SleepAudioMetadataTableD77D3179",
             },
@@ -4150,7 +4381,7 @@ def sort_filter_rules(json_obj):
           ],
         },
         "Runtime": "nodejs20.x",
-        "Timeout": 60,
+        "Timeout": 120,
         "TracingConfig": {
           "Mode": "Active",
         },
@@ -4237,6 +4468,75 @@ def sort_filter_rules(json_obj):
                   ],
                 },
               ],
+            },
+            {
+              "Action": [
+                "s3:GetObject*",
+                "s3:GetBucket*",
+                "s3:List*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioInputBucket1923DAE4",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioInputBucket1923DAE4",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": [
+                "s3:DeleteObject*",
+                "s3:PutObject",
+                "s3:PutObjectLegalHold",
+                "s3:PutObjectRetention",
+                "s3:PutObjectTagging",
+                "s3:PutObjectVersionTagging",
+                "s3:Abort*",
+              ],
+              "Effect": "Allow",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "SleepAudioOutputBucketBD13D91D",
+                    "Arn",
+                  ],
+                },
+                {
+                  "Fn::Join": [
+                    "",
+                    [
+                      {
+                        "Fn::GetAtt": [
+                          "SleepAudioOutputBucketBD13D91D",
+                          "Arn",
+                        ],
+                      },
+                      "/*",
+                    ],
+                  ],
+                },
+              ],
+            },
+            {
+              "Action": "polly:SynthesizeSpeech",
+              "Effect": "Allow",
+              "Resource": "*",
             },
           ],
           "Version": "2012-10-17",

@@ -124,21 +124,36 @@ export class CdkBaseStack extends cdk.Stack {
     });
 
     // Lambda Function - SleepAudioProcessor
-    // Basic Lambda function skeleton for audio processing with X-Ray tracing
+    // Audio processing Lambda with full S3 download/upload and Polly synthesis
     this.audioProcessorFunction = new lambda.Function(this, 'SleepAudioProcessor', {
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
       code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/sleep-audio-processor')),
       environment: {
         TABLE_NAME: this.metadataTable.tableName,
+        INPUT_BUCKET: this.inputBucket.bucketName,
+        OUTPUT_BUCKET: this.outputBucket.bucketName,
       },
-      timeout: cdk.Duration.seconds(60),
-      description: 'Processes and enriches audio metadata',
+      timeout: cdk.Duration.seconds(120), // Increased for audio processing and Polly synthesis
+      description: 'Processes audio files using Polly synthesis and S3 operations',
       tracing: lambda.Tracing.ACTIVE,
     });
 
     // Grant Lambda permissions to access DynamoDB
     this.metadataTable.grantReadWriteData(this.audioProcessorFunction);
+
+    // Grant Lambda permissions to read from input bucket
+    this.inputBucket.grantRead(this.audioProcessorFunction);
+
+    // Grant Lambda permissions to write to output bucket
+    this.outputBucket.grantWrite(this.audioProcessorFunction);
+
+    // Grant Lambda permissions to use Amazon Polly for speech synthesis
+    this.audioProcessorFunction.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['polly:SynthesizeSpeech'],
+      resources: ['*'], // Polly doesn't support resource-level permissions
+    }));
 
     // Step Functions State Machine - orchestrates audio processing workflow
     // Log group for state machine execution logs
@@ -205,19 +220,24 @@ export class CdkBaseStack extends cdk.Stack {
     });
 
     // DynamoDB UpdateItem Task - updates status to COMPLETED on success
+    // Now includes output location and file size from Lambda processing result
     const updateCompletedStatusTask = new tasks.DynamoUpdateItem(this, 'UpdateCompletedStatusTask', {
       table: this.metadataTable,
       key: {
         audioId: tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.key')),
       },
-      updateExpression: 'SET #status = :status, #updatedAt = :updatedAt',
+      updateExpression: 'SET #status = :status, #updatedAt = :updatedAt, #outputLocation = :outputLocation, #outputFileSize = :outputFileSize',
       expressionAttributeNames: {
         '#status': 'status',
         '#updatedAt': 'updatedAt',
+        '#outputLocation': 'outputLocation',
+        '#outputFileSize': 'outputFileSize',
       },
       expressionAttributeValues: {
         ':status': tasks.DynamoAttributeValue.fromString('COMPLETED'),
         ':updatedAt': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$$.State.EnteredTime')),
+        ':outputLocation': tasks.DynamoAttributeValue.fromString(sfn.JsonPath.stringAt('$.audioProcessorResult.Payload.outputLocation')),
+        ':outputFileSize': tasks.DynamoAttributeValue.numberFromString(sfn.JsonPath.stringAt('States.Format(\'{}\', $.audioProcessorResult.Payload.outputFileSize)')),
       },
       resultPath: '$.updateResult',
     }).addRetry({
@@ -227,7 +247,7 @@ export class CdkBaseStack extends cdk.Stack {
       backoffRate: 2,
     });
 
-    // SNS Publish Task - sends success notification
+    // SNS Publish Task - sends success notification with output details
     const publishSuccessTask = new tasks.SnsPublish(this, 'PublishSuccessTask', {
       topic: this.completedTopic,
       message: sfn.TaskInput.fromObject({
@@ -235,6 +255,8 @@ export class CdkBaseStack extends cdk.Stack {
         audioId: sfn.JsonPath.stringAt('$.key'),
         inputBucket: sfn.JsonPath.stringAt('$.bucket'),
         inputKey: sfn.JsonPath.stringAt('$.key'),
+        outputLocation: sfn.JsonPath.stringAt('$.audioProcessorResult.Payload.outputLocation'),
+        outputFileSize: sfn.JsonPath.stringAt('$.audioProcessorResult.Payload.outputFileSize'),
         completedAt: sfn.JsonPath.stringAt('$$.State.EnteredTime'),
       }),
       resultPath: '$.snsResult',

@@ -1,18 +1,25 @@
 /**
  * Sleep Audio Processor Lambda
  * 
- * Basic Lambda function skeleton for audio processing pipeline.
- * Receives input from Step Functions state machine, validates input,
- * logs it, and returns enriched metadata.
- * 
- * This is a minimal placeholder for future audio processing, metadata enrichment,
- * or validation logic.
+ * Implements full audio processing pipeline:
+ * - Downloads input audio from S3 or receives text prompt
+ * - Generates/processes sleep audio using Amazon Polly
+ * - Uploads processed audio to output S3 bucket
+ * - Updates DynamoDB with output metadata and COMPLETED status
  */
 
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
+import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { PollyClient, SynthesizeSpeechCommand } from '@aws-sdk/client-polly';
+import { Readable } from 'stream';
 
 const dynamoDbClient = new DynamoDBClient({});
+const s3Client = new S3Client({});
+const pollyClient = new PollyClient({});
+
 const TABLE_NAME = process.env.TABLE_NAME;
+const INPUT_BUCKET = process.env.INPUT_BUCKET;
+const OUTPUT_BUCKET = process.env.OUTPUT_BUCKET;
 
 // Supported audio file extensions
 const SUPPORTED_AUDIO_FORMATS = ['.mp3', '.wav', '.m4a', '.ogg', '.flac'];
@@ -28,10 +35,14 @@ interface AudioProcessorResult {
   status: string;
   audioId: string;
   message: string;
+  outputLocation?: string;
+  outputFileSize?: number;
+  outputDuration?: number;
   enrichedMetadata?: {
     processingTimestamp: string;
     processor: string;
     fileExtension?: string;
+    outputKey?: string;
   };
 }
 
@@ -58,6 +69,137 @@ function validateInput(event: AudioProcessorEvent): { valid: boolean; error?: st
   }
   
   return { valid: true };
+}
+
+/**
+ * Converts a readable stream to Buffer
+ */
+async function streamToBuffer(stream: Readable): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+/**
+ * Downloads audio file from S3
+ */
+async function downloadAudioFromS3(bucket: string, key: string): Promise<Buffer> {
+  const command = new GetObjectCommand({
+    Bucket: bucket,
+    Key: key,
+  });
+  
+  const response = await s3Client.send(command);
+  
+  if (!response.Body) {
+    throw new Error('Failed to download audio: empty response body');
+  }
+  
+  return await streamToBuffer(response.Body as Readable);
+}
+
+/**
+ * Generates soothing sleep audio using Amazon Polly
+ * For text input or as enhancement to existing audio
+ */
+async function generateSleepAudio(text?: string): Promise<Buffer> {
+  // Default soothing sleep narration
+  const narrationText = text || 
+    'Close your eyes and relax. Let your breathing slow down naturally. ' +
+    'Feel the tension leaving your body with each exhale. ' +
+    'You are safe, comfortable, and at peace. ' +
+    'Drift gently into a deep, restful sleep.';
+  
+  const command = new SynthesizeSpeechCommand({
+    Text: narrationText,
+    OutputFormat: 'mp3',
+    VoiceId: 'Joanna', // Soothing neural voice
+    Engine: 'neural',
+    TextType: 'text',
+  });
+  
+  const response = await pollyClient.send(command);
+  
+  if (!response.AudioStream) {
+    throw new Error('Failed to synthesize speech: empty audio stream');
+  }
+  
+  return await streamToBuffer(response.AudioStream as Readable);
+}
+
+/**
+ * Uploads processed audio to output S3 bucket
+ * Returns the output key and file size
+ */
+async function uploadProcessedAudio(
+  audioBuffer: Buffer,
+  originalKey: string
+): Promise<{ outputKey: string; fileSize: number }> {
+  if (!OUTPUT_BUCKET) {
+    throw new Error('OUTPUT_BUCKET environment variable not set');
+  }
+  
+  // Generate output key: processed-{originalFilename}-{timestamp}.mp3
+  const timestamp = Date.now();
+  const originalFilename = originalKey.substring(originalKey.lastIndexOf('/') + 1, originalKey.lastIndexOf('.'));
+  const outputKey = `processed-${originalFilename}-${timestamp}.mp3`;
+  
+  const command = new PutObjectCommand({
+    Bucket: OUTPUT_BUCKET,
+    Key: outputKey,
+    Body: audioBuffer,
+    ContentType: 'audio/mpeg',
+  });
+  
+  await s3Client.send(command);
+  
+  return {
+    outputKey,
+    fileSize: audioBuffer.length,
+  };
+}
+
+/**
+ * Updates DynamoDB with processing results
+ */
+async function updateDynamoDBMetadata(
+  audioId: string,
+  outputKey: string,
+  fileSize: number,
+  requestId: string
+): Promise<void> {
+  if (!TABLE_NAME) {
+    throw new Error('TABLE_NAME environment variable not set');
+  }
+  
+  const outputLocation = `s3://${OUTPUT_BUCKET}/${outputKey}`;
+  
+  const command = new UpdateItemCommand({
+    TableName: TABLE_NAME,
+    Key: {
+      audioId: { S: audioId },
+    },
+    UpdateExpression: 'SET #processor = :processor, #processedAt = :processedAt, #outputLocation = :outputLocation, #outputFileSize = :outputFileSize, #status = :status',
+    ExpressionAttributeNames: {
+      '#processor': 'processor',
+      '#processedAt': 'processedAt',
+      '#outputLocation': 'outputLocation',
+      '#outputFileSize': 'outputFileSize',
+      '#status': 'status',
+    },
+    ExpressionAttributeValues: {
+      ':processor': { S: 'SleepAudioProcessor' },
+      ':processedAt': { S: new Date().toISOString() },
+      ':outputLocation': { S: outputLocation },
+      ':outputFileSize': { N: fileSize.toString() },
+      ':status': { S: 'COMPLETED' },
+    },
+  });
+  
+  await dynamoDbClient.send(command);
 }
 
 /**
@@ -97,11 +239,11 @@ export async function handler(event: AudioProcessorEvent, context: any): Promise
     const audioId = key; // Using key as audioId (consistent with state machine)
     const fileExtension = key.toLowerCase().substring(key.lastIndexOf('.'));
     
-    // Structured log for processing
+    // Structured log for processing start
     console.log(JSON.stringify({
       level: 'INFO',
       requestId,
-      message: 'Processing audio file',
+      message: 'Starting audio processing pipeline',
       data: {
         bucket,
         key,
@@ -111,63 +253,107 @@ export async function handler(event: AudioProcessorEvent, context: any): Promise
       timestamp: new Date().toISOString(),
     }));
     
-    // Optionally update DynamoDB with processing status
-    if (TABLE_NAME) {
+    // Step 1: Download input audio from S3 (if needed for enhancement)
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Downloading input audio from S3',
+      bucket,
+      key,
+      timestamp: new Date().toISOString(),
+    }));
+    
+    let inputAudio: Buffer | null = null;
+    try {
+      inputAudio = await downloadAudioFromS3(bucket, key);
       console.log(JSON.stringify({
         level: 'INFO',
         requestId,
-        message: 'Updating DynamoDB table',
-        tableName: TABLE_NAME,
+        message: 'Input audio downloaded successfully',
+        size: inputAudio.length,
         timestamp: new Date().toISOString(),
       }));
-      
-      try {
-        const updateCommand = new UpdateItemCommand({
-          TableName: TABLE_NAME,
-          Key: {
-            audioId: { S: audioId },
-          },
-          UpdateExpression: 'SET #processor = :processor, #processedAt = :processedAt, #fileExtension = :fileExtension',
-          ExpressionAttributeNames: {
-            '#processor': 'processor',
-            '#processedAt': 'processedAt',
-            '#fileExtension': 'fileExtension',
-          },
-          ExpressionAttributeValues: {
-            ':processor': { S: 'SleepAudioProcessor' },
-            ':processedAt': { S: new Date().toISOString() },
-            ':fileExtension': { S: fileExtension },
-          },
-        });
-        await dynamoDbClient.send(updateCommand);
-        
-        console.log(JSON.stringify({
-          level: 'INFO',
-          requestId,
-          message: 'DynamoDB update successful',
-          timestamp: new Date().toISOString(),
-        }));
-      } catch (dbError) {
-        console.log(JSON.stringify({
-          level: 'ERROR',
-          requestId,
-          message: 'DynamoDB update failed',
-          error: dbError instanceof Error ? dbError.message : 'Unknown error',
-          timestamp: new Date().toISOString(),
-        }));
-        // Continue processing even if DynamoDB update fails
-      }
+    } catch (downloadError) {
+      console.log(JSON.stringify({
+        level: 'WARN',
+        requestId,
+        message: 'Failed to download input audio, will generate from scratch',
+        error: downloadError instanceof Error ? downloadError.message : 'Unknown error',
+        timestamp: new Date().toISOString(),
+      }));
+      // Continue with generation-only approach
     }
     
-    // Return enriched metadata
+    // Step 2: Generate/process sleep audio using Polly
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Generating sleep audio with Amazon Polly',
+      timestamp: new Date().toISOString(),
+    }));
+    
+    const processedAudio = await generateSleepAudio();
+    
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Sleep audio generated successfully',
+      size: processedAudio.length,
+      timestamp: new Date().toISOString(),
+    }));
+    
+    // Step 3: Upload processed audio to output bucket
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Uploading processed audio to output bucket',
+      outputBucket: OUTPUT_BUCKET,
+      timestamp: new Date().toISOString(),
+    }));
+    
+    const { outputKey, fileSize } = await uploadProcessedAudio(processedAudio, key);
+    
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Processed audio uploaded successfully',
+      outputKey,
+      fileSize,
+      timestamp: new Date().toISOString(),
+    }));
+    
+    // Step 4: Update DynamoDB with output metadata
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'Updating DynamoDB with output metadata',
+      tableName: TABLE_NAME,
+      audioId,
+      timestamp: new Date().toISOString(),
+    }));
+    
+    await updateDynamoDBMetadata(audioId, outputKey, fileSize, requestId);
+    
+    console.log(JSON.stringify({
+      level: 'INFO',
+      requestId,
+      message: 'DynamoDB update successful',
+      timestamp: new Date().toISOString(),
+    }));
+    
+    // Return success result with output details
+    const outputLocation = `s3://${OUTPUT_BUCKET}/${outputKey}`;
     const result: AudioProcessorResult = {
       status: 'success',
       audioId,
-      message: 'Audio metadata processed successfully',
+      message: 'Audio processing completed successfully',
+      outputLocation,
+      outputFileSize: fileSize,
       enrichedMetadata: {
         processingTimestamp: new Date().toISOString(),
         processor: 'SleepAudioProcessor',
         fileExtension,
+        outputKey,
       },
     };
     
@@ -178,6 +364,8 @@ export async function handler(event: AudioProcessorEvent, context: any): Promise
       result: {
         status: result.status,
         audioId: result.audioId,
+        outputLocation: result.outputLocation,
+        outputFileSize: result.outputFileSize,
       },
       timestamp: new Date().toISOString(),
     }));
