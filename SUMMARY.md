@@ -2,12 +2,13 @@
 
 ## Overview
 
-The **cdk-sleep-ts-copilot** project is a fully serverless, event-driven sleep audio processing pipeline built on AWS using TypeScript CDK. Developed over 12 issues with strict Test-Driven Development (TDD), this production-ready system demonstrates AWS best practices for security, observability, reliability, and multi-environment deployment.
+The **cdk-sleep-ts-copilot** project is a fully serverless, event-driven sleep audio processing pipeline built on AWS using TypeScript CDK. Developed over 13 issues with strict Test-Driven Development (TDD), this production-ready system demonstrates AWS best practices for security, observability, reliability, and multi-environment deployment. The project serves as a **living experiment** in agentic TDD Infrastructure-as-Code, with reusable patterns extracted for future projects.
 
 **Repository**: `obstreperous-ai/cdk-sleep-ts-copilot`  
-**Development Period**: Issues #2 through #12  
+**Development Period**: Issues #2 through #13  
 **Test Coverage**: 145 passing tests (100% TDD-driven)  
-**Infrastructure**: 100% AWS CDK (TypeScript)
+**Infrastructure**: 100% AWS CDK (TypeScript)  
+**Meta-Prompting**: Reusable patterns extracted in [META-PROMPTS.md](./META-PROMPTS.md)
 
 ---
 
@@ -174,6 +175,14 @@ A complete event-driven pipeline that processes audio files through the followin
 - Tested success paths, error paths, security, observability
 - Polished all documentation (README, ARCHITECTURE.md, SUMMARY.md)
 - Final code review and consistency improvements
+
+### Issue #13: Documentation Enhancement + Meta-Prompting Patterns (145 tests)
+- Reviewed codebase structure, naming conventions, and modularity
+- Enhanced README.md with table of contents and experiment methodology section
+- Created META-PROMPTS.md with reusable patterns for agentic TDD IaC projects
+- Extracted 10+ reusable patterns (TDD workflow, documentation-as-source-of-truth, issue-driven development, multi-environment configs, security-first, observability-first)
+- Updated ARCHITECTURE.md with Issue #13 documentation
+- Validated all documentation links and cross-references
 
 ---
 
@@ -374,10 +383,11 @@ npx cdk diff -c env=prod
 
 All documentation is kept up-to-date with code changes:
 
-- **[README.md](./README.md)**: Quick start, TDD rules, useful commands
+- **[README.md](./README.md)**: Quick start, TDD rules, experiment methodology, useful commands
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)**: Comprehensive architecture design, Mermaid diagram, implementation status
 - **[CONTRIBUTING.md](./CONTRIBUTING.md)**: TDD workflow, commit conventions, PR checklist
 - **[AGENT_GUIDELINES.md](./.github/AGENT_GUIDELINES.md)**: AI agent persona, rules, and workflow
+- **[META-PROMPTS.md](./META-PROMPTS.md)**: 🆕 **Reusable patterns** for agentic TDD IaC projects (Issue #13)
 - **[SUMMARY.md](./SUMMARY.md)**: This document - project overview and key decisions
 
 ---
