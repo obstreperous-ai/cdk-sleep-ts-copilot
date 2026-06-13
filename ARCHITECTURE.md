@@ -60,9 +60,10 @@ Design goals:
 | X-Ray Tracing & Observability | ✅ Done (Issue #10) | X-Ray on Lambda + State Machine, structured logging, CloudWatch Alarms |
 | Full Audio Processing & Output Handling | ✅ Done (Issue #11) | S3 download, Polly synthesis, S3 upload, DynamoDB update |
 | End-to-End Validation & Documentation | ✅ Done (Issue #12) | 145 passing tests, comprehensive documentation, production-ready |
+| Documentation Enhancement & Meta-Prompts | ✅ Done (Issue #13) | `README.md`, `META-PROMPTS.md` with reusable patterns |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
 
-> **Status: ✅ Core Pipeline Complete** — All planned components for Issues #2–#12 are implemented, tested, and documented. The pipeline is production-ready and can be deployed to dev/stage/prod environments. Future enhancements (Bedrock, DLQ) remain as optional extensions.
+> **Status: ✅ Core Pipeline Complete** — All planned components for Issues #2–#13 are implemented, tested, and documented. The pipeline is production-ready and can be deployed to dev/stage/prod environments. Meta-prompting patterns extracted for reuse in future projects. Future enhancements (Bedrock, DLQ) remain as optional extensions.
 
 > This table **must** be updated in the same commit as every infrastructure change.
 
@@ -634,6 +635,60 @@ This milestone concludes the core development of the event-driven Sleep Audio Pi
 - **Visibility**: X-Ray and structured logs enable rapid troubleshooting
 - **Proactive Monitoring**: CloudWatch Alarms alert before users are impacted
 - **Production-Ready**: Robust error handling meets production observability standards
+
+---
+
+### Documentation Enhancement & Meta-Prompting Patterns (Issue #13)
+
+Issue #13 focuses on **extracting reusable patterns** from the cdk-sleep-ts-copilot experiment and enhancing documentation to emphasize the project's role as a living experiment in agentic TDD for Infrastructure-as-Code.
+
+**Review Findings:**
+- **Strengths Identified**: Comprehensive documentation, clean project structure, consistent naming conventions (SleepAudio* prefix), L2 constructs throughout, 145 passing tests, good separation of concerns (bin/, lib/, lambda/, test/)
+- **Gaps Identified**: Meta-prompting patterns not explicitly extracted for reuse, missing experiment methodology section, could enhance README navigation with table of contents
+- **Validation**: All tests pass, build succeeds, `cdk synth` works across all environments
+
+**Documentation Enhancements:**
+- **README.md**: Added table of contents, expanded experiment methodology section explaining pure issue-driven development and strict TDD enforcement, added meta-prompting patterns section, emphasized agentic/experimental nature throughout
+- **META-PROMPTS.md**: Created comprehensive guide extracting reusable patterns including:
+  - Strict TDD workflow pattern (Red → Green → Refactor)
+  - Documentation-as-source-of-truth pattern
+  - Issue-driven development pattern with GitHub issue templates
+  - Multi-environment configuration pattern with CDK context
+  - Agent persona template for AI-assisted development
+  - Security-first and observability-first configuration patterns
+  - Testing organization pattern with issue-based hierarchy
+  - Copy-paste templates and implementation examples
+  - Quick start checklist for applying patterns to new projects
+  - Lessons learned and key metrics from this experiment
+
+**Meta-Prompting Patterns Extracted:**
+1. **Core Principles**: 7 golden rules for agentic TDD IaC (Test First Always, Architecture First, Document Synchronously, L2/L3 Over L1, Synthesize Before Commit, Conventional Commits, Issue-Based Organization)
+2. **Workflow Patterns**: Step-by-step implementation guides with success criteria
+3. **Testing Patterns**: Fine-grained assertions, issue-based organization, snapshot tests
+4. **Security Patterns**: Baseline configurations for S3, SNS, DynamoDB, IAM least-privilege
+5. **Observability Patterns**: X-Ray tracing, structured JSON logging, CloudWatch alarms
+6. **Reusable Templates**: Agent guidelines template, issue template, commit message examples
+
+**Benefits:**
+- **Reusability**: Patterns from this experiment can accelerate future IaC projects
+- **Knowledge Transfer**: Templates and examples codify best practices for AI-assisted TDD
+- **Experiment Documentation**: Clear articulation of methodology enables replication
+- **Community Value**: Meta-prompts provide value to broader IaC/TDD community
+- **Professional Polish**: Documentation suitable for publication or portfolio showcase
+
+**Validation:**
+- ✅ All 145 tests still passing
+- ✅ `npm run build` succeeds
+- ✅ `npx cdk synth` generates valid CloudFormation
+- ✅ All documentation links validated and working
+- ✅ No infrastructure changes (documentation-only issue)
+- ✅ README.md enhanced with experiment methodology and meta-prompt references
+- ✅ META-PROMPTS.md created with comprehensive reusable patterns
+- ✅ ARCHITECTURE.md updated with Issue #13 entry
+
+**Project Status: ✅ DOCUMENTATION COMPLETE**
+
+Issue #13 completes the documentation layer of the project, transforming cdk-sleep-ts-copilot from a working infrastructure project into a **complete experiment artifact** with extractable, reusable patterns for the wider infrastructure-as-code community.
 
 ---
 

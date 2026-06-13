@@ -1,11 +1,37 @@
 # cdk-sleep-ts-copilot
 
 > **An event-driven sleep audio pipeline built with AWS CDK (TypeScript) using strict Test-Driven Development**
+> 
+> 🧪 **Experiment in Agentic TDD Infrastructure-as-Code** — This project demonstrates pure issue-driven development with GitHub Copilot, following strict TDD discipline for every infrastructure change.
 
 [![CI](https://github.com/obstreperous-ai/cdk-sleep-ts-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/obstreperous-ai/cdk-sleep-ts-copilot/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen)](./test)
 [![CDK](https://img.shields.io/badge/AWS%20CDK-2.252.0-orange)](https://aws.amazon.com/cdk/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-blue)](https://www.typescriptlang.org/)
+[![TDD](https://img.shields.io/badge/TDD-100%25-brightgreen)](./CONTRIBUTING.md)
+
+---
+
+## 📚 Table of Contents
+
+- [Overview](#-overview)
+- [Experiment Methodology](#-experiment-methodology)
+- [Architecture](#️-architecture)
+- [Quick Start](#-quick-start)
+- [Test-Driven Development (TDD)](#-test-driven-development-tdd)
+- [Documentation](#-documentation)
+- [Useful Commands](#️-useful-commands)
+- [Project Structure](#️-project-structure)
+- [Security Features](#-security-features)
+- [Observability](#-observability)
+- [Multi-Environment Support](#-multi-environment-support)
+- [Technology Stack](#-technology-stack)
+- [Future Enhancements](#-future-enhancements-not-implemented)
+- [Development Journey](#-development-journey)
+- [Meta-Prompting Patterns](#-meta-prompting-patterns)
+- [Contributing](#-contributing)
+- [License](#-license)
+- [Links](#-links)
 
 ---
 
@@ -25,6 +51,51 @@ The **Sleep Audio Pipeline** is a fully serverless, production-ready system that
 - **30+ AWS resources** deployed via CDK
 - **12 development issues** (Issues #2–#12)
 - **3 environments** supported (dev, stage, prod)
+
+---
+
+## 🧪 Experiment Methodology
+
+This project serves as a **living experiment** in agentic Test-Driven Development (TDD) for Infrastructure-as-Code (IaC). The goal: demonstrate that strict TDD discipline, when combined with AI-assisted development (GitHub Copilot), produces high-quality, well-documented, production-ready infrastructure.
+
+### Core Experiment Principles
+
+1. **Pure Issue-Driven Development**
+   - Every feature starts as a GitHub issue with clear goals, tasks, and success criteria
+   - Issues are completed sequentially (no parallel work to maintain clarity)
+   - Each issue closes with a comprehensive test suite and documentation update
+
+2. **Strict TDD Enforcement**
+   - **Red first** — Write failing test before any production code
+   - **Green next** — Write minimal code to pass the test
+   - **Refactor** — Clean up while keeping tests green
+   - **Gate deployment** — `npm test` + `npx cdk synth` must pass before commit
+   - **No exceptions** — 100% TDD compliance throughout the project
+
+3. **Architecture as Source of Truth**
+   - [`ARCHITECTURE.md`](./ARCHITECTURE.md) defines the target design before any implementation
+   - Architecture document updated synchronously with code (same commit)
+   - Implementation status table tracks progress (✅ Done, 🚧 In Progress, ⬜ Not Started)
+
+4. **Documentation-First Culture**
+   - Every infrastructure change documented before, during, and after implementation
+   - Mermaid diagrams kept in sync with code
+   - Development journey captured in [SUMMARY.md](./SUMMARY.md)
+
+5. **Conventional Commits & Traceability**
+   - Semantic commit messages (`feat`, `fix`, `test`, `docs`, etc.)
+   - Tests organized by issue number for full traceability
+   - Clear audit trail: Issue → Test → Code → Documentation
+
+### Experiment Outcomes
+
+✅ **Hypothesis Validated**: Strict TDD + AI assistance produces production-ready infrastructure  
+✅ **145 tests, 0 failures** — No regressions, comprehensive coverage  
+✅ **Zero manual debugging** — Tests caught errors before deployment  
+✅ **Self-documenting** — Code, tests, and docs tell a complete story  
+✅ **Reusable patterns** — Extracted to [META-PROMPTS.md](./META-PROMPTS.md) for future projects  
+
+See [SUMMARY.md](./SUMMARY.md) for detailed retrospective and lessons learned.
 
 ---
 
@@ -179,11 +250,12 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full TDD workflow and developme
 
 | Document | Purpose |
 |----------|---------|
-| **[README.md](./README.md)** | You are here - quick start and overview |
+| **[README.md](./README.md)** | You are here - quick start, experiment overview, architecture summary |
 | **[ARCHITECTURE.md](./ARCHITECTURE.md)** | Comprehensive architecture design, Mermaid diagrams, implementation status |
 | **[SUMMARY.md](./SUMMARY.md)** | Project summary, key decisions, development journey, metrics |
 | **[CONTRIBUTING.md](./CONTRIBUTING.md)** | TDD workflow, commit conventions, PR checklist, development setup |
 | **[AGENT_GUIDELINES.md](./.github/AGENT_GUIDELINES.md)** | AI agent persona, rules, and workflow for GitHub Copilot |
+| **[META-PROMPTS.md](./META-PROMPTS.md)** | 🆕 **Reusable patterns** for agentic TDD IaC projects |
 
 ---
 
@@ -342,6 +414,34 @@ See [SUMMARY.md](./SUMMARY.md) for a detailed development journey and key decisi
 
 ---
 
+## 🤖 Meta-Prompting Patterns
+
+This project demonstrates reusable patterns for **agentic Test-Driven Development** in Infrastructure-as-Code. These patterns have been extracted and documented in [META-PROMPTS.md](./META-PROMPTS.md) for use in future projects.
+
+### Key Patterns Extracted
+
+1. **Strict TDD Workflow Pattern** — Red → Green → Refactor cycle with gates
+2. **Documentation-as-Source-of-Truth Pattern** — Living architecture with implementation tracking
+3. **Issue-Driven Development Pattern** — GitHub issues drive all work with clear success criteria
+4. **Multi-Environment Configuration Pattern** — Context-driven dev/stage/prod configs
+5. **Agent Persona Template** — Define AI agent rules and workflow for consistency
+6. **Security-First Configuration Pattern** — Bake security best practices into defaults
+7. **Observability-First Pattern** — X-Ray tracing, structured logging, alarms from day one
+8. **Testing Organization Pattern** — Issue-based test hierarchy with fine-grained assertions
+
+### Using These Patterns
+
+The [META-PROMPTS.md](./META-PROMPTS.md) document provides:
+- 📋 **Copy-paste templates** for agent guidelines, issue structure, and testing patterns
+- 🎯 **Implementation examples** with TypeScript/CDK code snippets
+- ✅ **Success criteria** and testing approaches for each pattern
+- 🔧 **Quick start checklist** for applying patterns to new projects
+- 📖 **Lessons learned** from the cdk-sleep-ts-copilot experiment
+
+**Use Case**: Starting a new CDK project with GitHub Copilot? Copy the agent persona template, testing patterns, and security baselines from META-PROMPTS.md to establish TDD discipline from day one.
+
+---
+
 ## 🤝 Contributing
 
 Contributions are welcome! This project follows strict TDD and conventional commits.
@@ -375,5 +475,11 @@ See [LICENSE](./LICENSE) file for details.
 
 ---
 
+## 🙏 Acknowledgments
+
+This project is a **living experiment** in agentic Test-Driven Development for Infrastructure-as-Code. Every line of infrastructure code was developed test-first using GitHub Copilot, demonstrating that AI-assisted development can maintain strict engineering discipline while accelerating delivery.
+
 **Built with ❤️ by GitHub Copilot using strict Test-Driven Development**
+
+🤖 **Want to replicate this experiment?** See [META-PROMPTS.md](./META-PROMPTS.md) for reusable patterns and templates.
 
