@@ -61,9 +61,10 @@ Design goals:
 | Full Audio Processing & Output Handling | ✅ Done (Issue #11) | S3 download, Polly synthesis, S3 upload, DynamoDB update |
 | End-to-End Validation & Documentation | ✅ Done (Issue #12) | 145 passing tests, comprehensive documentation, production-ready |
 | Documentation Enhancement & Meta-Prompts | ✅ Done (Issue #13) | `README.md`, `META-PROMPTS.md` with reusable patterns |
+| Experiment Design Documentation | ✅ Done (Issue #14) | `EXPERIMENT.md` with comprehensive experimental design and methodology |
 | SQS Dead-Letter Queue | ⬜ Not started | — |
 
-> **Status: ✅ Core Pipeline Complete** — All planned components for Issues #2–#13 are implemented, tested, and documented. The pipeline is production-ready and can be deployed to dev/stage/prod environments. Meta-prompting patterns extracted for reuse in future projects. Future enhancements (Bedrock, DLQ) remain as optional extensions.
+> **Status: ✅ Core Pipeline Complete + Experiment Documentation** — All planned components for Issues #2–#14 are implemented, tested, and documented. The pipeline is production-ready and can be deployed to dev/stage/prod environments. Meta-prompting patterns extracted and comprehensive experiment design documented for research and reuse. Future enhancements (Bedrock, DLQ) remain as optional extensions.
 
 > This table **must** be updated in the same commit as every infrastructure change.
 
@@ -689,6 +690,106 @@ Issue #13 focuses on **extracting reusable patterns** from the cdk-sleep-ts-copi
 **Project Status: ✅ DOCUMENTATION COMPLETE**
 
 Issue #13 completes the documentation layer of the project, transforming cdk-sleep-ts-copilot from a working infrastructure project into a **complete experiment artifact** with extractable, reusable patterns for the wider infrastructure-as-code community.
+
+---
+
+### Experiment Design & Meta-Analysis (Issue #14)
+
+Issue #14 focuses on **capturing the complete experimental design and methodology** in a comprehensive document that serves as the foundation for final evaluation and validates the agentic TDD IaC hypothesis.
+
+**Goal:**
+Create a comprehensive experiment design document (EXPERIMENT.md) that captures:
+- Experimental hypothesis and objectives
+- Detailed methodology (TDD workflow, issue-driven development, architecture-as-code)
+- Actors and setup (GitHub Copilot + TypeScript/AWS CDK)
+- Prompting patterns and meta-prompts (referencing META-PROMPTS.md)
+- Issue-by-issue history summary (Issues #2-#13)
+- Key decisions and trade-offs
+- Preliminary observations (strengths, challenges, open questions)
+- Hypothesis validation (evidence, caveats, implications)
+
+**EXPERIMENT.md Sections Created:**
+
+1. **Overview & Goals**: Hypothesis, primary objectives, and success criteria
+   - Hypothesis: Can an AI agent autonomously build production-grade infrastructure using strict TDD?
+   - 5 primary objectives: Validate agentic TDD, test issue-driven development, evaluate architecture-first approach, extract reusable patterns, measure quality metrics
+   - Success criteria: 100% TDD compliance, production-ready infrastructure, comprehensive documentation
+
+2. **Methodology**: Detailed explanation of experimental approach
+   - Pure issue-driven development with structured issue templates
+   - Strict Red→Green→Refactor TDD cycle (100% compliance)
+   - ARCHITECTURE.md as single source of truth
+   - Documentation-first culture (5 core documents synchronized)
+   - Conventional commits with semantic versioning
+   - Multi-environment configuration (dev/stage/prod)
+
+3. **Actors & Setup**: GitHub Copilot capabilities and technology stack
+   - Primary actor: GitHub Copilot (Claude 3.5 Sonnet) + TypeScript/AWS CDK
+   - Capabilities leveraged: Code generation, test generation, documentation, tool use, Mermaid diagrams
+   - Technology stack: CDK v2.180.0+, Node.js 20.x, Jest 29+, 9 AWS services
+
+4. **Prompting Patterns & Meta-Prompts**: 11 reusable patterns documented in META-PROMPTS.md
+   - Core Principles (7 golden rules)
+   - TDD Workflow, Documentation-as-Source-of-Truth, Issue-Driven Development patterns
+   - Multi-Environment Configuration, Agent Persona Template patterns
+   - Security-First, Observability-First patterns
+   - Testing Organization, Commit Convention, Reusable Agent Instructions patterns
+
+5. **Issue History Summary**: Issue-by-issue breakdown with test growth tracking
+   - Issue #2: Architecture design (2 foundational tests)
+   - Issue #3: S3 + EventBridge (+9 tests, total 11)
+   - Issue #4: Step Functions skeleton (+2 tests, total 13)
+   - Issue #5: DynamoDB table (+1 test, total 14)
+   - Issue #6: SNS + error handling (+3 tests, total 17)
+   - Issue #7: Lambda processor skeleton (+14 tests, total 31)
+   - Issue #8: Pipeline wiring + validation (+34 tests, total 65)
+   - Issue #9: Multi-environment + refinements (+16 tests, total 81)
+   - Issue #10: Error handling + observability (+20 tests, total 101)
+   - Issue #11: Full audio processing (+22 tests, total 123)
+   - Issue #12: End-to-end validation (+22 tests, total 145)
+   - Issue #13: Meta-prompting patterns (145 tests, documentation focus)
+
+6. **Key Decisions & Trade-offs**: 10 major design decisions with rationale
+   - CDK L2/L3 constructs over L1 CloudFormation primitives
+   - Issue-based test organization with explicit issue references
+   - Architecture-as-code with Mermaid diagrams in Git
+   - Strict TDD enforcement (100% compliance, zero exceptions)
+   - Single repository for all documentation
+   - Node.js 20.x runtime, 120-second Lambda timeout
+   - KMS encryption for all data at rest
+   - Exponential backoff retry policy (2s → 4s → 8s)
+   - CloudWatch alarms with `TreatMissingData: NOT_BREACHING`
+
+7. **Preliminary Observations**: Strengths, challenges, and open questions
+   - **Strengths**: TDD scales to IaC, issue-driven prevents scope creep, architecture-as-code maintains integrity, meta-patterns extractable, CDK L2 enables rapid development
+   - **Challenges**: CDK synthesis errors need iteration, L2 test assertions verbose, documentation sync requires discipline, issue granularity affects flow, Mermaid complexity grows
+   - **Open Questions**: Generalization to other IaC frameworks? Scalability to multi-stack apps? Team collaboration? Multi-language experiment? CI/CD integration?
+
+8. **Hypothesis Validation**: Evidence of success with caveats
+   - **Answer**: Yes, hypothesis validated with caveats
+   - **Evidence**: 145 passing tests, 30+ AWS resources, comprehensive documentation, 11 reusable patterns, zero regressions, full traceability
+   - **Caveats**: Human-in-the-loop for issue creation, single actor (not multi-agent), greenfield project (no legacy code), narrow scope (one language/framework)
+   - **Implication**: Validated for greenfield, single-agent, structured-issue scenarios
+
+**Documentation Integration:**
+- ✅ EXPERIMENT.md created with comprehensive experimental design (28,613 characters, 8 major sections)
+- ✅ README.md updated with "Experiment Design" section linking to EXPERIMENT.md
+- ✅ README.md table of contents updated to include experiment design
+- ✅ README.md Documentation table updated with EXPERIMENT.md entry
+- ✅ ARCHITECTURE.md implementation status table updated with Issue #14 entry
+- ✅ ARCHITECTURE.md Issue #14 section added with comprehensive documentation
+
+**Validation:**
+- ✅ All 145 tests still passing (no code changes)
+- ✅ `npm run build` succeeds (documentation-only issue)
+- ✅ `npx cdk synth` generates valid CloudFormation (no infrastructure changes)
+- ✅ All documentation links validated and working
+- ✅ EXPERIMENT.md properly linked from README.md
+- ✅ Cross-references to META-PROMPTS.md, SUMMARY.md, ARCHITECTURE.md functional
+
+**Project Status: ✅ EXPERIMENT DESIGN DOCUMENTED**
+
+Issue #14 captures the complete experimental design and methodology, providing a comprehensive foundation for Issue #15 (Code Quality, Coverage & Reflection) and serving as a reference document for future agentic TDD IaC experiments.
 
 ---
 

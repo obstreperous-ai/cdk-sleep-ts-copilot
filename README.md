@@ -28,6 +28,7 @@
 - [Technology Stack](#-technology-stack)
 - [Future Enhancements](#-future-enhancements-not-implemented)
 - [Development Journey](#-development-journey)
+- [Experiment Design](#-experiment-design)
 - [Meta-Prompting Patterns](#-meta-prompting-patterns)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -253,9 +254,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full TDD workflow and developme
 | **[README.md](./README.md)** | You are here - quick start, experiment overview, architecture summary |
 | **[ARCHITECTURE.md](./ARCHITECTURE.md)** | Comprehensive architecture design, Mermaid diagrams, implementation status |
 | **[SUMMARY.md](./SUMMARY.md)** | Project summary, key decisions, development journey, metrics |
+| **[EXPERIMENT.md](./EXPERIMENT.md)** | 🧪 **Experiment design & methodology** - hypothesis, actors, prompting approach, observations |
+| **[META-PROMPTS.md](./META-PROMPTS.md)** | 🆕 **Reusable patterns** for agentic TDD IaC projects |
 | **[CONTRIBUTING.md](./CONTRIBUTING.md)** | TDD workflow, commit conventions, PR checklist, development setup |
 | **[AGENT_GUIDELINES.md](./.github/AGENT_GUIDELINES.md)** | AI agent persona, rules, and workflow for GitHub Copilot |
-| **[META-PROMPTS.md](./META-PROMPTS.md)** | 🆕 **Reusable patterns** for agentic TDD IaC projects |
 
 ---
 
@@ -411,6 +413,37 @@ This project was developed over **12 issues** following strict TDD:
 11. **Issue #12**: End-to-end validation + documentation polish (145 tests)
 
 See [SUMMARY.md](./SUMMARY.md) for a detailed development journey and key decisions.
+
+---
+
+## 🧪 Experiment Design
+
+This project is a **structured experiment** in agentic TDD Infrastructure-as-Code development. The full experimental design, methodology, actors, prompting approach, key decisions, and preliminary observations are documented in **[EXPERIMENT.md](./EXPERIMENT.md)**.
+
+### Experiment Overview
+
+- **Hypothesis**: Can an AI coding agent (GitHub Copilot) autonomously build production-grade, serverless AWS applications using strict TDD, issue-driven workflows, and architecture-as-code principles?
+- **Actor**: GitHub Copilot (Coding Agent) + TypeScript/AWS CDK
+- **Methodology**: Pure issue-driven development with 100% TDD compliance (Red→Green→Refactor)
+- **Duration**: 13 issues (Issues #2-#14) spanning architecture design through meta-analysis
+- **Outcome**: ✅ **Hypothesis validated** — 145 passing tests, production-ready infrastructure, zero regressions
+
+### Key Findings
+
+- ✅ **TDD discipline scales to IaC** — Red→Green→Refactor works seamlessly for infrastructure code
+- ✅ **Issue-driven development prevents scope creep** — Structured issues replace human intuition about "what's next"
+- ✅ **Architecture-as-code maintains design integrity** — ARCHITECTURE.md as living document prevents drift
+- ✅ **Meta-prompting patterns are extractable** — 11 reusable patterns documented in META-PROMPTS.md
+- ✅ **CDK L2 constructs enable rapid development** — High-level abstractions reduce boilerplate significantly
+
+See **[EXPERIMENT.md](./EXPERIMENT.md)** for comprehensive analysis including:
+- Detailed methodology (TDD workflow, issue-driven development, architecture-as-code)
+- Actors & setup (GitHub Copilot capabilities, technology stack)
+- Prompting patterns & meta-prompts (11 reusable patterns)
+- Issue-by-issue history summary (Issues #2-#13)
+- Key decisions & trade-offs (CDK L2 vs L1, 120s timeout, KMS encryption, etc.)
+- Preliminary observations (strengths, challenges, open questions)
+- Hypothesis validation (evidence, caveats, implications)
 
 ---
 
