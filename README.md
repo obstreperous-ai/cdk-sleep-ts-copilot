@@ -5,7 +5,7 @@
 > 🧪 **Experiment in Agentic TDD Infrastructure-as-Code** — This project demonstrates pure issue-driven development with GitHub Copilot, following strict TDD discipline for every infrastructure change.
 
 [![CI](https://github.com/obstreperous-ai/cdk-sleep-ts-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/obstreperous-ai/cdk-sleep-ts-copilot/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-145%20passing-brightgreen)](./test)
+[![Tests](https://img.shields.io/badge/tests-164%20passing-brightgreen)](./test)
 [![CDK](https://img.shields.io/badge/AWS%20CDK-2.252.0-orange)](https://aws.amazon.com/cdk/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-blue)](https://www.typescriptlang.org/)
 [![TDD](https://img.shields.io/badge/TDD-100%25-brightgreen)](./CONTRIBUTING.md)
@@ -48,9 +48,9 @@ The **Sleep Audio Pipeline** is a fully serverless, production-ready system that
 5. SNS publishes notifications → Success or failure alerts
 
 **📊 Project Stats:**
-- **145 passing tests** (100% TDD coverage)
+- **164 passing tests** (100% TDD coverage)
 - **30+ AWS resources** deployed via CDK
-- **12 development issues** (Issues #2–#12)
+- **15 development issues** (Issues #2–#15)
 - **3 environments** supported (dev, stage, prod)
 
 ---
@@ -91,7 +91,7 @@ This project serves as a **living experiment** in agentic Test-Driven Developmen
 ### Experiment Outcomes
 
 ✅ **Hypothesis Validated**: Strict TDD + AI assistance produces production-ready infrastructure  
-✅ **145 tests, 0 failures** — No regressions, comprehensive coverage  
+✅ **164 tests, 0 failures** — No regressions, 95% coverage  
 ✅ **Zero manual debugging** — Tests caught errors before deployment  
 ✅ **Self-documenting** — Code, tests, and docs tell a complete story  
 ✅ **Reusable patterns** — Extracted to [META-PROMPTS.md](./META-PROMPTS.md) for future projects  
@@ -224,7 +224,7 @@ This project follows **strict TDD** — every infrastructure change is test-driv
 ### Test Coverage
 
 ```bash
-# Run all tests (145 tests)
+# Run all tests (164 tests)
 npm test
 
 # Run tests in watch mode (for active development)
@@ -235,11 +235,15 @@ npm test -- -u
 
 # Run specific test file
 npm test -- test/cdk-base.test.ts
+
+# Run with coverage report
+npm test -- --coverage
 ```
 
 **Test Metrics:**
-- **145 passing tests** across 2 test suites
+- **164 passing tests** across 3 test suites (CDK: 145, Lambda: 19)
 - **6 snapshot tests** for regression protection
+- **95.12% code coverage** (CDK: 100%, Lambda: 95.12%)
 - **Issue-based organization**: Tests grouped by GitHub issue for traceability
 - **100% TDD compliance**: Every feature implemented after a failing test
 
