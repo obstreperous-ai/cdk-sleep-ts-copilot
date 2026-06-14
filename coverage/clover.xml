@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<coverage generated="1781428712481" clover="3.2.0">
+  <project timestamp="1781428712481" name="All files">
+    <metrics statements="68" coveredstatements="68" conditionals="6" coveredconditionals="6" methods="4" coveredmethods="4" elements="78" coveredelements="78" complexity="0" loc="68" ncloc="68" packages="1" files="2" classes="2"/>
+    <file name="cdk-base-stack.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/obstreperous-ai/cdk-sleep-ts-copilot/lib/cdk-base-stack.ts">
+      <metrics statements="61" coveredstatements="61" conditionals="6" coveredconditionals="6" methods="2" coveredmethods="2"/>
+      <line num="1" count="2" type="stmt"/>
+      <line num="2" count="2" type="stmt"/>
+      <line num="3" count="2" type="stmt"/>
+      <line num="4" count="2" type="stmt"/>
+      <line num="5" count="2" type="stmt"/>
+      <line num="6" count="2" type="stmt"/>
+      <line num="7" count="2" type="stmt"/>
+      <line num="8" count="2" type="stmt"/>
+      <line num="9" count="2" type="stmt"/>
+      <line num="10" count="2" type="stmt"/>
+      <line num="11" count="2" type="stmt"/>
+      <line num="12" count="2" type="stmt"/>
+      <line num="13" count="2" type="stmt"/>
+      <line num="14" count="2" type="stmt"/>
+      <line num="16" count="2" type="stmt"/>
+      <line num="30" count="160" type="cond" truecount="2" falsecount="0"/>
+      <line num="32" count="160" type="cond" truecount="4" falsecount="0"/>
+      <line num="34" count="6" type="stmt"/>
+      <line num="39" count="2" type="stmt"/>
+      <line num="45" count="152" type="stmt"/>
+      <line num="52" count="2" type="stmt"/>
+      <line num="64" count="160" type="stmt"/>
+      <line num="67" count="160" type="stmt"/>
+      <line num="70" count="160" type="stmt"/>
+      <line num="80" count="160" type="stmt"/>
+      <line num="89" count="160" type="stmt"/>
+      <line num="103" count="160" type="stmt"/>
+      <line num="110" count="160" type="stmt"/>
+      <line num="115" count="160" type="stmt"/>
+      <line num="121" count="160" type="stmt"/>
+      <line num="128" count="160" type="stmt"/>
+      <line num="143" count="160" type="stmt"/>
+      <line num="146" count="160" type="stmt"/>
+      <line num="149" count="160" type="stmt"/>
+      <line num="152" count="160" type="stmt"/>
+      <line num="160" count="160" type="stmt"/>
+      <line num="169" count="160" type="stmt"/>
+      <line num="188" count="160" type="stmt"/>
+      <line num="204" count="160" type="stmt"/>
+      <line num="224" count="160" type="stmt"/>
+      <line num="251" count="160" type="stmt"/>
+      <line num="266" count="160" type="stmt"/>
+      <line num="291" count="160" type="stmt"/>
+      <line num="307" count="160" type="stmt"/>
+      <line num="312" count="160" type="stmt"/>
+      <line num="316" count="160" type="stmt"/>
+      <line num="322" count="160" type="stmt"/>
+      <line num="328" count="160" type="stmt"/>
+      <line num="333" count="160" type="stmt"/>
+      <line num="335" count="160" type="stmt"/>
+      <line num="346" count="160" type="stmt"/>
+      <line num="349" count="160" type="stmt"/>
+      <line num="350" count="160" type="stmt"/>
+      <line num="353" count="160" type="stmt"/>
+      <line num="369" count="160" type="stmt"/>
+      <line num="381" count="160" type="stmt"/>
+      <line num="393" count="160" type="stmt"/>
+      <line num="396" count="160" type="stmt"/>
+      <line num="408" count="160" type="stmt"/>
+      <line num="411" count="160" type="stmt"/>
+      <line num="423" count="160" type="stmt"/>
+    </file>
+    <file name="pipeline-stack.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/obstreperous-ai/cdk-sleep-ts-copilot/lib/pipeline-stack.ts">
+      <metrics statements="7" coveredstatements="7" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="2"/>
+      <line num="1" count="1" type="stmt"/>
+      <line num="5" count="1" type="stmt"/>
+      <line num="13" count="1" type="stmt"/>
+      <line num="15" count="2" type="stmt"/>
+      <line num="73" count="1" type="stmt"/>
+      <line num="75" count="3" type="stmt"/>
+      <line num="82" count="3" type="stmt"/>
+    </file>
+  </project>
+</coverage>
