@@ -2,11 +2,11 @@
 
 ## Overview
 
-The **cdk-sleep-ts-copilot** project is a fully serverless, event-driven sleep audio processing pipeline built on AWS using TypeScript CDK. Developed over 13 issues with strict Test-Driven Development (TDD), this production-ready system demonstrates AWS best practices for security, observability, reliability, and multi-environment deployment. The project serves as a **living experiment** in agentic TDD Infrastructure-as-Code, with reusable patterns extracted for future projects.
+The **cdk-sleep-ts-copilot** project is a fully serverless, event-driven sleep audio processing pipeline built on AWS using TypeScript CDK. Developed over 15 issues with strict Test-Driven Development (TDD), this production-ready system demonstrates AWS best practices for security, observability, reliability, and multi-environment deployment. The project serves as a **living experiment** in agentic TDD Infrastructure-as-Code, with reusable patterns extracted for future projects.
 
 **Repository**: `obstreperous-ai/cdk-sleep-ts-copilot`  
-**Development Period**: Issues #2 through #13  
-**Test Coverage**: 145 passing tests (100% TDD-driven)  
+**Development Period**: Issues #2 through #15  
+**Test Coverage**: 164 passing tests (95.12% coverage, 100% TDD-driven)  
 **Infrastructure**: 100% AWS CDK (TypeScript)  
 **Meta-Prompting**: Reusable patterns extracted in [META-PROMPTS.md](./META-PROMPTS.md)
 
@@ -190,9 +190,10 @@ A complete event-driven pipeline that processes audio files through the followin
 
 ### Test Coverage Summary
 
-- **Total Tests**: 145 (all passing)
-- **Test Files**: 2 (cdk-base.test.ts, pipeline-stack.test.ts)
+- **Total Tests**: 164 (all passing)
+- **Test Files**: 3 (cdk-base.test.ts, pipeline-stack.test.ts, lambda/sleep-audio-processor/index.test.ts)
 - **Snapshot Tests**: 6 (regression protection)
+- **Code Coverage**: 95.12% overall (CDK: 100%, Lambda: 95.12%)
 - **Test Organization**: Issue-based test blocks for traceability
 
 ### Testing Approach
@@ -201,6 +202,7 @@ A complete event-driven pipeline that processes audio files through the followin
 2. **Snapshot Tests**: Capture full CloudFormation templates for regression detection
 3. **Multi-Environment Tests**: Verify dev/stage/prod configurations independently
 4. **Issue-Based Organization**: Nested describe blocks map to GitHub issues
+5. **Lambda Unit Tests**: Comprehensive mocking of AWS SDK clients for isolated testing
 
 ### Key Test Categories
 
@@ -211,6 +213,7 @@ A complete event-driven pipeline that processes audio files through the followin
 - Observability (X-Ray, CloudWatch Logs, Alarms)
 - Multi-environment (removal policies, log retention)
 - End-to-end validation (complete pipeline flow)
+- Lambda logic (input validation, processing pipeline, error scenarios)
 
 ---
 
