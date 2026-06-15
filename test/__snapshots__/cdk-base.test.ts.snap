@@ -865,7 +865,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
+          "S3Key": "a0455e3e5ac3ff9a0142959928bdfd40ee9296fc843377c0dda0c7c78f252690.zip",
         },
         "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
@@ -2023,7 +2023,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
+          "S3Key": "a0455e3e5ac3ff9a0142959928bdfd40ee9296fc843377c0dda0c7c78f252690.zip",
         },
         "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
@@ -3181,7 +3181,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
+          "S3Key": "a0455e3e5ac3ff9a0142959928bdfd40ee9296fc843377c0dda0c7c78f252690.zip",
         },
         "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
@@ -4339,7 +4339,7 @@ def sort_filter_rules(json_obj):
       "Properties": {
         "Code": {
           "S3Bucket": "cdk-hnb659fds-assets-123456789012-us-east-1",
-          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
+          "S3Key": "a0455e3e5ac3ff9a0142959928bdfd40ee9296fc843377c0dda0c7c78f252690.zip",
         },
         "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
@@ -5515,7 +5515,7 @@ def sort_filter_rules(json_obj):
           "S3Bucket": {
             "Fn::Sub": "cdk-hnb659fds-assets-\${AWS::AccountId}-\${AWS::Region}",
           },
-          "S3Key": "0348c7dfdc06677031f595b7324fc0ca3042d89b7f42a09586f8b6fb10817f64.zip",
+          "S3Key": "a0455e3e5ac3ff9a0142959928bdfd40ee9296fc843377c0dda0c7c78f252690.zip",
         },
         "Description": "Processes audio files using Polly synthesis and S3 operations",
         "Environment": {
