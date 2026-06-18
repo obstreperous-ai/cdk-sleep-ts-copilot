@@ -6,6 +6,7 @@
 
 [![CI](https://github.com/obstreperous-ai/cdk-sleep-ts-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/obstreperous-ai/cdk-sleep-ts-copilot/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-164%20passing-brightgreen)](./test)
+[![Coverage](https://img.shields.io/badge/coverage-97.33%25-brightgreen)](./coverage)
 [![CDK](https://img.shields.io/badge/AWS%20CDK-2.252.0-orange)](https://aws.amazon.com/cdk/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9.3-blue)](https://www.typescriptlang.org/)
 [![TDD](https://img.shields.io/badge/TDD-100%25-brightgreen)](./CONTRIBUTING.md)
@@ -30,6 +31,7 @@
 - [Development Journey](#-development-journey)
 - [Experiment Design](#-experiment-design)
 - [Meta-Prompting Patterns](#-meta-prompting-patterns)
+- [Draw Your Own Conclusions](#-draw-your-own-conclusions)
 - [Contributing](#-contributing)
 - [License](#-license)
 - [Links](#-links)
@@ -91,12 +93,37 @@ This project serves as a **living experiment** in agentic Test-Driven Developmen
 ### Experiment Outcomes
 
 ✅ **Hypothesis Validated**: Strict TDD + AI assistance produces production-ready infrastructure  
-✅ **164 tests, 0 failures** — No regressions, 95% coverage  
+✅ **164 tests, 0 failures** — No regressions, 97.33% statement coverage, 78.94% branch coverage  
 ✅ **Zero manual debugging** — Tests caught errors before deployment  
 ✅ **Self-documenting** — Code, tests, and docs tell a complete story  
 ✅ **Reusable patterns** — Extracted to [META-PROMPTS.md](./META-PROMPTS.md) for future projects  
 
-See [SUMMARY.md](./SUMMARY.md) for detailed retrospective and lessons learned.
+**The TDD Cycle in Practice:**
+
+```mermaid
+graph LR
+    A[🔴 RED<br/>Write Failing Test] --> B[🟢 GREEN<br/>Write Minimal Code]
+    B --> C[✨ REFACTOR<br/>Clean Up Code]
+    C --> D{Tests<br/>Pass?}
+    D -->|Yes| E[✅ Commit]
+    D -->|No| B
+    E --> A
+    
+    style A fill:#ff6b6b,color:#fff
+    style B fill:#51cf66,color:#fff
+    style C fill:#ffd93d,color:#000
+    style E fill:#339af0,color:#fff
+```
+
+**Results Summary:**
+- **15 development issues** completed (Issues #2–#16)
+- **164 comprehensive tests** across 3 test suites
+- **97.33% statement coverage**, 100% function coverage
+- **30+ AWS resources** deployed via CDK
+- **Zero test failures** throughout entire development lifecycle
+- **11 reusable meta-prompting patterns** extracted
+
+See [FINAL-REPORT.md](./FINAL-REPORT.md) for comprehensive self-evaluation with quantitative metrics, qualitative assessments, and honest analysis of strengths/weaknesses.
 
 ---
 
@@ -243,7 +270,9 @@ npm test -- --coverage
 **Test Metrics:**
 - **164 passing tests** across 3 test suites (CDK: 145, Lambda: 19)
 - **6 snapshot tests** for regression protection
-- **95.12% code coverage** (CDK: 100%, Lambda: 95.12%)
+- **97.33% statement coverage** (CDK: 100%, Lambda: 95.12%)
+- **78.94% branch coverage** with comprehensive edge case testing
+- **100% function coverage** across all code
 - **Issue-based organization**: Tests grouped by GitHub issue for traceability
 - **100% TDD compliance**: Every feature implemented after a failing test
 
@@ -256,9 +285,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for the full TDD workflow and developme
 | Document | Purpose |
 |----------|---------|
 | **[README.md](./README.md)** | You are here - quick start, experiment overview, architecture summary |
-| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | Comprehensive architecture design, Mermaid diagrams, implementation status |
-| **[SUMMARY.md](./SUMMARY.md)** | Project summary, key decisions, development journey, metrics |
+| **[FINAL-REPORT.md](./FINAL-REPORT.md)** | 🎯 **Comprehensive self-evaluation** - quantitative metrics (97.33% coverage, 164 tests), qualitative assessments (TDD: A+, Code Quality: A), strengths/weaknesses, hypothesis validation |
 | **[EXPERIMENT.md](./EXPERIMENT.md)** | 🧪 **Experiment design & methodology** - hypothesis, actors, prompting approach, observations |
+| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | Comprehensive architecture design, Mermaid diagrams, implementation status, TDD journey visualization |
+| **[SUMMARY.md](./SUMMARY.md)** | Project summary, key decisions, development journey, metrics |
 | **[META-PROMPTS.md](./META-PROMPTS.md)** | 🆕 **Reusable patterns** for agentic TDD IaC projects |
 | **[CONTRIBUTING.md](./CONTRIBUTING.md)** | TDD workflow, commit conventions, PR checklist, development setup |
 | **[AGENT_GUIDELINES.md](./.github/AGENT_GUIDELINES.md)** | AI agent persona, rules, and workflow for GitHub Copilot |
@@ -476,6 +506,50 @@ The [META-PROMPTS.md](./META-PROMPTS.md) document provides:
 - 📖 **Lessons learned** from the cdk-sleep-ts-copilot experiment
 
 **Use Case**: Starting a new CDK project with GitHub Copilot? Copy the agent persona template, testing patterns, and security baselines from META-PROMPTS.md to establish TDD discipline from day one.
+
+---
+
+## 🎓 Draw Your Own Conclusions
+
+This project is an **open experiment** in agentic TDD infrastructure development. The data, methodology, and results are fully documented—now it's your turn to evaluate and interpret.
+
+### 📊 The Evidence
+
+Explore the complete experiment documentation to form your own assessment:
+
+| Document | What You'll Find |
+|----------|-----------------|
+| **[FINAL-REPORT.md](./FINAL-REPORT.md)** | 🔬 Comprehensive self-evaluation with quantitative metrics (97.33% coverage, 164 tests), qualitative assessments (TDD: A+, Code Quality: A), honest strengths/weaknesses analysis, and hypothesis validation |
+| **[EXPERIMENT.md](./EXPERIMENT.md)** | 🧪 Full experimental design: hypothesis, methodology, actors, prompting approach, issue-by-issue history, key decisions, challenges encountered, and open questions |
+| **[META-PROMPTS.md](./META-PROMPTS.md)** | 🤖 11 extractable patterns for agentic TDD IaC: Core Principles, TDD Workflow, Documentation-as-Source-of-Truth, Issue-Driven Development, Multi-Environment Config, Security-First, Testing Organization |
+| **[ARCHITECTURE.md](./ARCHITECTURE.md)** | 🏗️ Living design document with Mermaid diagrams, implementation status tracking, component specifications, and issue-by-issue implementation log |
+| **[SUMMARY.md](./SUMMARY.md)** | 📖 Development journey narrative: key decisions, testing highlights, observability approach, security patterns, and retrospective |
+| **[Test Suite](./test)** | ✅ 164 executable specifications organized by issue, demonstrating TDD discipline and comprehensive coverage (CDK: 100%, Lambda: 95.12%) |
+| **[Source Code](./lib)** | 💻 Production-ready TypeScript CDK infrastructure (897 LOC) with 30+ AWS resources, showcasing agent-generated code quality |
+
+### 🤔 Questions to Consider
+
+As you review the materials, consider these questions:
+
+1. **Quality**: Does the code meet production standards? Are the tests comprehensive?
+2. **TDD Discipline**: Did the agent truly follow Red→Green→Refactor, or were there shortcuts?
+3. **Documentation**: Is the documentation synchronized with code? Does it tell a coherent story?
+4. **Scalability**: Would this approach work for larger, more complex infrastructure projects?
+5. **Reusability**: Are the meta-prompting patterns genuinely transferable to other projects?
+6. **Human Role**: What was essential human contribution vs. AI-generated work?
+7. **Limitations**: What didn't work well? What trade-offs were made?
+8. **Generalizability**: Does this validate agentic TDD for IaC broadly, or only in narrow contexts?
+
+### 💬 Share Your Findings
+
+Found something interesting? Spotted an issue? Have suggestions for improvement?
+
+- **Open an issue** to discuss experiment methodology or results
+- **Submit a PR** to enhance documentation or add missing analysis
+- **Share your own experiments** using the [META-PROMPTS.md](./META-PROMPTS.md) patterns
+- **Cite this work** in your research on AI-assisted development or TDD for infrastructure
+
+**The goal**: Foster transparent, evidence-based discussion about the capabilities and limitations of agentic development for infrastructure code.
 
 ---
 

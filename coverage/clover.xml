@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<coverage generated="1781542184861" clover="3.2.0">
-  <project timestamp="1781542184861" name="All files">
+<coverage generated="1781713560455" clover="3.2.0">
+  <project timestamp="1781713560455" name="All files">
     <metrics statements="148" coveredstatements="144" conditionals="38" coveredconditionals="30" methods="14" coveredmethods="14" elements="200" coveredelements="188" complexity="0" loc="148" ncloc="148" packages="2" files="3" classes="3"/>
     <package name="lambda.sleep-audio-processor">
       <metrics statements="80" coveredstatements="76" conditionals="32" coveredconditionals="24" methods="10" coveredmethods="10"/>
-      <file name="index.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/obstreperous-ai/cdk-sleep-ts-copilot/lambda/sleep-audio-processor/index.ts">
+      <file name="index.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/lambda/sleep-audio-processor/index.ts">
         <metrics statements="80" coveredstatements="76" conditionals="32" coveredconditionals="24" methods="10" coveredmethods="10"/>
         <line num="11" count="1" type="stmt"/>
         <line num="12" count="1" type="stmt"/>
@@ -90,7 +90,7 @@
     </package>
     <package name="lib">
       <metrics statements="68" coveredstatements="68" conditionals="6" coveredconditionals="6" methods="4" coveredmethods="4"/>
-      <file name="cdk-base-stack.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/obstreperous-ai/cdk-sleep-ts-copilot/lib/cdk-base-stack.ts">
+      <file name="cdk-base-stack.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/lib/cdk-base-stack.ts">
         <metrics statements="61" coveredstatements="61" conditionals="6" coveredconditionals="6" methods="2" coveredmethods="2"/>
         <line num="1" count="2" type="stmt"/>
         <line num="2" count="2" type="stmt"/>
@@ -154,7 +154,7 @@
         <line num="411" count="160" type="stmt"/>
         <line num="423" count="160" type="stmt"/>
       </file>
-      <file name="pipeline-stack.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/obstreperous-ai/cdk-sleep-ts-copilot/lib/pipeline-stack.ts">
+      <file name="pipeline-stack.ts" path="/home/runner/work/cdk-sleep-ts-copilot/cdk-sleep-ts-copilot/lib/pipeline-stack.ts">
         <metrics statements="7" coveredstatements="7" conditionals="0" coveredconditionals="0" methods="2" coveredmethods="2"/>
         <line num="1" count="1" type="stmt"/>
         <line num="5" count="1" type="stmt"/>
